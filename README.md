@@ -15,3 +15,7 @@ PulseOps MVP repository.
 
 
 # Pulseopsproject-v2
+# Clone a project
+
+ssh - git clone git@github.com:amenses-aayush-mishra/Pulseopsproject-v2.git
+https - https://github.com/amenses-aayush-mishra/Pulseopsproject-v2.git
