@@ -154,24 +154,51 @@ function LoginInner() {
   //   - session is loading or unauthenticated
   //   - form is submitting (busy) — avoids races with credential logins
   //   - a manual redirect from onSubmit is already in flight
-  useEffect(() => {
-    if (status === 'loading' || status === 'unauthenticated' || busy) return;
-    if (redirectedRef.current) return; // manual redirect already in progress
-    if (status === 'authenticated' && session?.user) {
-      const u = session.user;
-      const wCount = u.workspaceCount ?? (u.hasWorkspace ? 1 : 0);
-      redirectedRef.current = true;
-      if (wCount === 0) {
-        window.location.href = '/onboarding';
-      } else if (wCount === 1) {
-        const wsId = u.activeOrganizationId || (u.workspaces?.[0]?.id ?? null);
-        window.location.href = wsId ? `/workspace/${wsId}` : '/onboarding';
-      } else {
-        // 2+ workspaces — let the user choose.
-        window.location.href = '/select-workspace';
-      }
+ useEffect(() => {
+  if (status === 'loading' || busy) return;
+
+  if (redirectedRef.current) return; // manual redirect already in progress
+
+  // If this is an invitation login, DO NOT redirect based on
+  // an existing authenticated session.
+  const searchParams = new URLSearchParams(window.location.search);
+  const orgEmail =
+    searchParams.get('orgEmail') || searchParams.get('email');
+  const inviteToken =
+    searchParams.get('inviteToken') || searchParams.get('token');
+
+  const isInvitationLogin = Boolean(orgEmail || inviteToken);
+
+  if (isInvitationLogin) {
+    return;
+  }
+
+  // Normal login flow
+  if (status === 'unauthenticated') return;
+
+  if (status === 'authenticated' && session?.user) {
+    const u = session.user;
+
+    const wCount = u.workspaceCount ?? (u.hasWorkspace ? 1 : 0);
+
+    redirectedRef.current = true;
+
+    if (wCount === 0) {
+      window.location.href = '/onboarding';
+    } else if (wCount === 1) {
+      const wsId =
+        u.activeOrganizationId ||
+        (u.workspaces?.[0]?.id ?? null);
+
+      window.location.href = wsId
+        ? `/workspace/${wsId}`
+        : '/onboarding';
+    } else {
+      // 2+ workspaces — let the user choose.
+      window.location.href = '/select-workspace';
     }
-  }, [status, session, router, busy]);
+  }
+}, [status, session, router, busy]);
 
   const onSubmit = async (e) => {
     e.preventDefault();
@@ -210,10 +237,16 @@ function LoginInner() {
       const { hasWorkspace, activeOrganizationId, isInvitedUser } = user;
 
       if (isInvitedUser || orgEmail) {
-        // CASE 2: Invited User -> Route directly to Invitations/Dashboard
-        const targetOrg = activeOrganizationId || searchParams.get('workspaceId');
-        window.location.href = `/workspace/${targetOrg}/invitations`;
-      } else if (hasWorkspace) {
+  // Invitation login: route to the invited workspace.
+  // The authenticated account is now the account that just logged in.
+  const targetOrg = activeOrganizationId || searchParams.get('workspaceId');
+
+  if (targetOrg) {
+    window.location.href = `/workspace/${targetOrg}/invitations`;
+  } else {
+    window.location.href = '/select-workspace';
+  }
+} else if (hasWorkspace) {
         // CASE 1: Existing User -> Route to Workspace Selector
         window.location.href = '/select-workspace';
       } else {
