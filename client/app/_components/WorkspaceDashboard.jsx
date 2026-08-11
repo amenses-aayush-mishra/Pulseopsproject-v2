@@ -13,8 +13,9 @@ const INVITE_ENDPOINT = `${API_BASE}/api/organizations/invite`;
 // TASK-113 — invitation role options (mirrors the backend ALLOWED_ROLES).
 const INVITE_ROLES = [
   { value: 'developer', label: 'Developer' },
-  { value: 'techlead', label: 'Tech Lead' },
+  { value: 'maintainer', label: 'Maintainer' },
   { value: 'admin', label: 'Admin' },
+  { value: 'viewer', label: 'Viewer' },
 ];
 
 const GRID_BG = {

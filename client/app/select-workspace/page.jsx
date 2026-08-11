@@ -15,8 +15,9 @@ const GRID_BG = {
 const ROLE_COLORS = {
   owner:     { bg: 'bg-violet-100',  text: 'text-violet-700',  dot: 'bg-violet-500'  },
   admin:     { bg: 'bg-indigo-100',  text: 'text-indigo-700',  dot: 'bg-indigo-500'  },
-  techlead:  { bg: 'bg-sky-100',     text: 'text-sky-700',     dot: 'bg-sky-500'     },
+  maintainer:{ bg: 'bg-sky-100',     text: 'text-sky-700',     dot: 'bg-sky-500'     },
   developer: { bg: 'bg-emerald-100', text: 'text-emerald-700', dot: 'bg-emerald-500' },
+  viewer:    { bg: 'bg-amber-100',   text: 'text-amber-700',   dot: 'bg-amber-500'   },
 };
 
 const roleColor = (role) =>

@@ -13,7 +13,7 @@ const Invitation = require('../models/Invitation');
 
 const authenticate = require('../middleware/authenticate');
 const verifyTenantAccess = require('../middleware/verifyTenantAccess');
-const requireRole = require('../middleware/requireRole');
+const requirePermission = require('../middleware/requirePermission');
 
 const router = express.Router();
 
@@ -27,7 +27,7 @@ const sha256 = (value) => crypto.createHash('sha256').update(value).digest('hex'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const TEAM_SIZES = ['1-10', '11-50', '51-200', '200+'];
-const ALLOWED_ROLES = ['owner', 'admin', 'techlead', 'developer'];
+const ALLOWED_ROLES = ['owner', 'admin', 'maintainer', 'developer', 'viewer'];
 
 const signToken = (payload) =>
   jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '7d' });
@@ -269,14 +269,14 @@ async function handleInvite(req, res) {
 
 /**
  * POST /api/organizations/invite
- * (authenticate, verifyTenantAccess, requireRole(['owner','admin']))
+ * (authenticate, verifyTenantAccess, requirePermission('manage_members'))
  * Body: { email, role } — role defaults to 'developer'.
  */
 router.post(
   '/invite',
   authenticate,
   verifyTenantAccess,
-  requireRole(['owner', 'admin']),
+  requirePermission('invite_members'),
   handleInvite
 );
 
@@ -296,13 +296,13 @@ router.post(
     next();
   },
   verifyTenantAccess,
-  requireRole(['owner', 'admin']),
+  requirePermission('manage_members'),
   handleInvite
 );
 
 
 /**
- * GET /api/organizations/settings — protected (owner/admin)
+ * GET /api/organizations/settings — protected (requirePermission('manage_workspace'))
  * Returns the active organization's profile + themeSettings for the workspace
  * shell (TASK-107) and the settings UI.
  */
@@ -310,7 +310,7 @@ router.get(
   '/settings',
   authenticate,
   verifyTenantAccess,
-  requireRole(['owner', 'admin']),
+  requirePermission('manage_workspace'),
   async (req, res) => {
     try {
       const org = await Organization.findById(req.organizationId);

@@ -4,7 +4,7 @@ const express = require('express');
 const { verifyWebhookSignature } = require('../middleware/verifyGithubWebhook');
 const authenticate = require('../middleware/authenticate');
 const verifyTenantAccess = require('../middleware/verifyTenantAccess');
-const requireRole = require('../middleware/requireRole');
+const requirePermission = require('../middleware/requirePermission');
 const { encrypt, decrypt } = require('../utils/crypto');
 const Integration = require('../models/Integration');
 const Repository = require('../models/Repository');
@@ -39,7 +39,7 @@ router.get(
   '/github/connect',
   authenticate,
   verifyTenantAccess,
-  requireRole(['owner', 'admin']),
+  requirePermission('manage_integrations'),
   async (req, res) => {
     const clientId = process.env.GITHUB_INTEGRATION_CLIENT_ID;
     if (!clientId) {
@@ -67,7 +67,7 @@ router.get(
 );
 
 // Legacy path: /api/integrations/connect (no provider segment)
-router.get('/connect', authenticate, verifyTenantAccess, requireRole(['owner', 'admin']), (req, res) => {
+router.get('/connect', authenticate, verifyTenantAccess, requirePermission('manage_integrations'), (req, res) => {
   // Redirect internally to the named route.
   req.url = '/github/connect';
   router.handle(req, res, () => {});
@@ -186,7 +186,7 @@ router.post(
   '/track-repositories',
   authenticate,
   verifyTenantAccess,
-  requireRole(['owner', 'admin']),
+  requirePermission('manage_integrations'),
   async (req, res) => {
     const integration = await Integration.findOne({
       organizationId: req.organizationId,

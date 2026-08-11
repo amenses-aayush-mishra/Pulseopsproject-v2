@@ -5,13 +5,14 @@ import { useSession } from 'next-auth/react';
 
 const API_BASE = process.env.NEXT_PUBLIC_EXPRESS_API_URL || 'http://localhost:5000';
 
-const ROLES = ['developer', 'techlead', 'admin'];
+const ROLES = ['developer', 'maintainer', 'admin', 'viewer'];
 
 const ROLE_COLORS = {
   owner: 'bg-violet-50 text-violet-700 ring-violet-600/20',
   admin: 'bg-indigo-50 text-indigo-700 ring-indigo-600/20',
-  techlead: 'bg-blue-50 text-blue-700 ring-blue-600/20',
+  maintainer: 'bg-blue-50 text-blue-700 ring-blue-600/20',
   developer: 'bg-slate-50 text-slate-700 ring-slate-600/20',
+  viewer: 'bg-amber-50 text-amber-700 ring-amber-600/20',
 };
 
 function RoleBadge({ role }) {
