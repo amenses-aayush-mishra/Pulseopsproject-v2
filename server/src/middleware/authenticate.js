@@ -5,14 +5,20 @@ const authenticate = (req, res, next) => {
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
 
   if (!token) {
-    return res.status(401).json({ success: false, message: 'Unauthorized' });
+    return res.status(401).json({ message: 'Authentication required' });
   }
 
   try {
-    req.user = jwt.verify(token, process.env.JWT_SECRET || 'dev-jwt-secret-change-me');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = {
+      userId: decoded.userId,
+      activeOrganizationId: decoded.activeOrganizationId || null,
+      role: decoded.role || null,
+      email: decoded.email || null,
+    };
     next();
   } catch (err) {
-    return res.status(401).json({ success: false, message: 'Invalid or expired token' });
+    return res.status(401).json({ message: 'Authentication required' });
   }
 };
 

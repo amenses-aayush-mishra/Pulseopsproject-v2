@@ -8,6 +8,10 @@ const integrationSchema = new Schema({
   accessToken: { type: String },
   refreshToken: { type: String },
   metadata: { type: Schema.Types.Mixed, default: {} },
+  // TASK-108 — webhook activity trail (updated by POST /api/integrations/:provider/webhook).
+  lastWebhookEvent: { type: String, default: null },
+  lastWebhookAt: { type: Date, default: null },
+  lastWebhookId: { type: String, default: null },
 }, { timestamps: true });
 
 integrationSchema.index({ organizationId: 1, provider: 1 }, { unique: true });
