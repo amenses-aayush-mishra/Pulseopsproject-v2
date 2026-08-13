@@ -10,6 +10,7 @@ const connectDB = require('./src/config/db');
 const authRoutes = require('./src/routes/authRoutes');
 const orgRoutes = require('./src/routes/orgRoutes');
 const integrationRoutes = require('./src/routes/integrationRoutes');
+const repositoryRoutes = require('./src/routes/repositoryRoutes');
 const securityHeaders = require('./src/middleware/securityHeaders');
 const errorHandler = require('./src/middleware/errorHandler');
 
@@ -57,6 +58,9 @@ app.use('/api/organizations', orgRoutes);
 // Mount orgRoutes at /api also so /api/workspaces/:id/invitations resolves correctly.
 app.use('/api', orgRoutes);
 app.use('/api/integrations', integrationRoutes);
+
+// Repositories module — lists imported GitHub repositories for a workspace.
+app.use('/api/repositories', repositoryRoutes);
 
 // Webhook routes (GitHub, Slack, Jira) — raw-body access is already set up
 // by the express.json verify callback above, so these share the same parser.

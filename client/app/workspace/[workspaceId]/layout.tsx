@@ -41,6 +41,9 @@ export default async function WorkspaceLayout({ children, params }) {
             <Link href={`/workspace/${workspaceId}`} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-indigo-600 transition-colors">
               Projects
             </Link>
+            <Link href={`/workspace/${workspaceId}/repositories`} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-indigo-600 transition-colors">
+              Repositories
+            </Link>
             <Link href={`/workspace/${workspaceId}/tasks`} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-indigo-600 transition-colors">
               Tasks
             </Link>
