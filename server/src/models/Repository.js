@@ -5,6 +5,9 @@ const repositorySchema = new Schema({
   organizationId: { type: Schema.Types.ObjectId, ref: 'Organization', required: true },
   name: { type: String, required: true, trim: true },
   githubRepoId: { type: String, required: true },
+  fullName: { type: String },
+  private: { type: Boolean, default: false },
+  htmlUrl: { type: String },
   webhookId: { type: String },
   defaultBranch: { type: String, default: 'main' },
   // TASK-108 — latest webhook delivery + commit observed on this repository.

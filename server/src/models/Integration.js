@@ -5,6 +5,10 @@ const integrationSchema = new Schema({
   organizationId: { type: Schema.Types.ObjectId, ref: 'Organization', required: true },
   provider: { type: String, required: true, enum: ['github', 'slack', 'jira'] },
   status: { type: String, enum: ['active', 'revoked', 'pending'], default: 'pending' },
+  // OAuth `state` guard. Persisted in /github/connect BEFORE the redirect and
+  // consumed in /github/callback. Without this field Mongoose's strict mode
+  // silently drops the value, breaking state validation on the callback.
+  state: { type: String },
   accessToken: { type: String },
   refreshToken: { type: String },
   metadata: { type: Schema.Types.Mixed, default: {} },

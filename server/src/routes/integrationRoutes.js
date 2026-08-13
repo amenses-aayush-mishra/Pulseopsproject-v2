@@ -220,11 +220,16 @@ router.post(
         const fullName = repoMeta?.full_name;
 
         await Repository.findOneAndUpdate(
-          { organizationId: req.organizationId, githubRepoId: repoId },
+          // Unique index on { organizationId, githubRepoId } + upsert prevents
+          // duplicate imports for the same workspace.
+          { organizationId: req.organizationId, githubRepoId: String(repoId) },
           {
             $set: {
               name: repoMeta?.name || String(repoId),
               fullName: fullName || String(repoId),
+              private: !!repoMeta?.private,
+              htmlUrl: repoMeta?.html_url || null,
+              defaultBranch: repoMeta?.default_branch || 'main',
             },
           },
           { upsert: true }
