@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import { Loader2, ExternalLink, GitBranch, CalendarDays, BookOpen } from 'lucide-react';
+import { Loader2, ExternalLink, GitBranch, CalendarDays, BookOpen, ChevronRight } from 'lucide-react';
 
 const API_BASE = process.env.NEXT_PUBLIC_EXPRESS_API_URL || 'http://localhost:5000';
 
@@ -19,7 +20,8 @@ function GitHubIcon() {
 
 // ─── Repository card ─────────────────────────────────────────────────────────
 
-function RepositoryCard({ repo }) {
+function RepositoryCard({ repo, workspaceId }) {
+  const router = useRouter();
   const importedDate = repo.createdAt
     ? new Date(repo.createdAt).toLocaleDateString(undefined, {
         year: 'numeric',
@@ -28,8 +30,27 @@ function RepositoryCard({ repo }) {
       })
     : '—';
 
+  const openDashboard = () => {
+    if (repo._id) {
+      router.push(`/workspace/${workspaceId}/repositories/${repo._id}`);
+    }
+  };
+
+  const onKeyDown = (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      openDashboard();
+    }
+  };
+
   return (
-    <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+    <div
+      role="link"
+      tabIndex={0}
+      onClick={openDashboard}
+      onKeyDown={onKeyDown}
+      className="group relative cursor-pointer rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden transition-all hover:border-indigo-200 hover:shadow-md"
+    >
       <div className="p-6 sm:p-8">
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-4 min-w-0">
@@ -67,12 +88,16 @@ function RepositoryCard({ repo }) {
           </div>
         </div>
 
-        <div className="mt-5 flex justify-end border-t border-slate-100 pt-5">
+        <div className="mt-5 flex items-center justify-between border-t border-slate-100 pt-5">
+          <span className="inline-flex items-center gap-0.5 text-xs font-semibold text-indigo-600 opacity-0 transition-opacity group-hover:opacity-100">
+            View dashboard <ChevronRight className="h-3.5 w-3.5" />
+          </span>
           {repo.htmlUrl ? (
             <a
               href={repo.htmlUrl}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
               className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-slate-700"
             >
               <ExternalLink className="h-4 w-4" />
@@ -171,7 +196,7 @@ export default function RepositoriesPage({ params }) {
       ) : (
         <div className="space-y-4">
           {repositories.map((repo) => (
-            <RepositoryCard key={repo._id || repo.name} repo={repo} />
+            <RepositoryCard key={repo._id || repo.name} repo={repo} workspaceId={workspaceId} />
           ))}
         </div>
       )}

@@ -5,31 +5,12 @@ const { verifyWebhookSignature } = require('../middleware/verifyGithubWebhook');
 const authenticate = require('../middleware/authenticate');
 const verifyTenantAccess = require('../middleware/verifyTenantAccess');
 const requirePermission = require('../middleware/requirePermission');
-const { encrypt, decrypt } = require('../utils/crypto');
+const { encrypt } = require('../utils/crypto');
+const { githubRequest } = require('../services/githubClient');
 const Integration = require('../models/Integration');
 const Repository = require('../models/Repository');
 
-const GITHUB_API = 'https://api.github.com';
-
 const router = express.Router();
-
-// ---------------------------------------------------------------------------
-// Helper: call GitHub API with the org's stored access token
-// ---------------------------------------------------------------------------
-async function githubRequest(path, integration, options = {}) {
-  const token = decrypt(integration.accessToken);
-  const res = await fetch(`${GITHUB_API}${path}`, {
-    ...options,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/vnd.github+json',
-      'X-GitHub-Api-Version': '2022-11-28',
-      'Content-Type': 'application/json',
-      ...(options.headers || {}),
-    },
-  });
-  return res;
-}
 
 // ---------------------------------------------------------------------------
 // GET /api/integrations/github/connect
