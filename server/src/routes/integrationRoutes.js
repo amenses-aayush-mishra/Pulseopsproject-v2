@@ -7,10 +7,14 @@ const verifyTenantAccess = require('../middleware/verifyTenantAccess');
 const requirePermission = require('../middleware/requirePermission');
 const { encrypt } = require('../utils/crypto');
 const { githubRequest } = require('../services/githubClient');
+const { jiraRequest } = require('../services/jiraClient');
 const Integration = require('../models/Integration');
 const Repository = require('../models/Repository');
+const JiraIssue = require('../models/JiraIssue');
+const createRateLimiter = require('../middleware/rateLimiter');
 
 const router = express.Router();
+const jiraWebhookLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 100 });
 
 // ---------------------------------------------------------------------------
 // GET /api/integrations/github/connect
@@ -300,9 +304,340 @@ router.post('/slack', (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// POST /api/webhooks/jira  (Jira issue webhooks)
+// GET /api/integrations/jira/connect
+// Returns a Jira Cloud 3LO OAuth URL for the requesting organisation.
 // ---------------------------------------------------------------------------
-router.post('/jira', (req, res) => {
+router.get(
+  '/jira/connect',
+  authenticate,
+  verifyTenantAccess,
+  requirePermission('manage_integrations'),
+  async (req, res) => {
+    const clientId = process.env.JIRA_INTEGRATION_CLIENT_ID;
+    if (!clientId) {
+      return res.status(503).json({ error: 'Jira OAuth is not configured on this server.' });
+    }
+    const state = crypto.randomBytes(20).toString('hex');
+    await Integration.findOneAndUpdate(
+      { organizationId: req.organizationId, provider: 'jira' },
+      {
+        $setOnInsert: { organizationId: req.organizationId, provider: 'jira' },
+        $set: { state, status: 'pending' },
+      },
+      { upsert: true, new: true }
+    );
+    const callbackUrl =
+      process.env.JIRA_CALLBACK_URL || 'http://localhost:5000/api/integrations/jira/callback';
+    const authUrl = new URL('https://auth.atlassian.com/authorize');
+    authUrl.searchParams.append('audience', 'api.atlassian.com');
+    authUrl.searchParams.append('client_id', clientId);
+    authUrl.searchParams.append('scope', 'read:jira-work write:jira-work offline_access');
+    authUrl.searchParams.append('redirect_uri', callbackUrl);
+    authUrl.searchParams.append('state', state);
+    authUrl.searchParams.append('response_type', 'code');
+    authUrl.searchParams.append('prompt', 'consent');
+    res.json({ url: authUrl.toString() });
+  }
+);
+
+// ---------------------------------------------------------------------------
+// GET /api/integrations/jira/callback  (OAuth redirect from Atlassian)
+// ---------------------------------------------------------------------------
+router.get('/jira/callback', async (req, res) => {
+  const { code, state } = req.query;
+  if (!code || !state) {
+    return res.status(400).json({ error: 'Missing code or state parameter.' });
+  }
+
+  const integration = await Integration.findOne({ provider: 'jira', state });
+  if (!integration) {
+    return res.status(400).json({ error: 'Invalid or expired OAuth state.' });
+  }
+
+  const callbackUrl =
+    process.env.JIRA_CALLBACK_URL || 'http://localhost:5000/api/integrations/jira/callback';
+
+  const tokenRes = await fetch('https://auth.atlassian.com/oauth/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({
+      grant_type: 'authorization_code',
+      client_id: process.env.JIRA_INTEGRATION_CLIENT_ID,
+      client_secret: process.env.JIRA_INTEGRATION_CLIENT_SECRET,
+      code: String(code),
+      redirect_uri: callbackUrl,
+    }),
+  });
+
+  const tokenData = await tokenRes.json();
+  if (!tokenRes.ok || !tokenData.access_token) {
+    console.error('[jira/callback] Token exchange failed with status:', tokenRes.status);
+    return res.status(400).json({ error: 'Failed to exchange Jira authorization code for tokens.' });
+  }
+
+  // Retrieve accessible Jira Cloud sites
+  const resResources = await fetch('https://api.atlassian.com/oauth/token/accessible-resources', {
+    headers: {
+      Authorization: `Bearer ${tokenData.access_token}`,
+      Accept: 'application/json',
+    },
+  });
+
+  const resources = await resResources.json();
+  if (!resResources.ok || !Array.isArray(resources) || resources.length === 0) {
+    return res.status(400).json({ error: 'No accessible Jira Cloud sites found for this authorization.' });
+  }
+
+  const site = resources[0];
+  const webhookToken = integration.metadata?.webhookToken || crypto.randomBytes(32).toString('hex');
+
+  integration.accessToken = encrypt(tokenData.access_token);
+  if (tokenData.refresh_token) {
+    integration.refreshToken = encrypt(tokenData.refresh_token);
+  }
+
+  integration.metadata = {
+    ...(integration.metadata || {}),
+    cloudId: site.id,
+    siteUrl: site.url,
+    siteName: site.name,
+    webhookToken,
+    expiresAt: Date.now() + (tokenData.expires_in || 3600) * 1000,
+  };
+  integration.status = 'active';
+  integration.state = undefined; // clear consumed state
+  await integration.save();
+
+  const frontendUrl = process.env.FRONTEND_URL || process.env.CLIENT_URL || 'http://localhost:3000';
+  res.redirect(
+    `${frontendUrl}/workspace/${integration.organizationId}/integrations?connected=jira`
+  );
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/integrations/jira/status
+// Returns the connection status of Jira for the workspace.
+// ---------------------------------------------------------------------------
+router.get(
+  '/jira/status',
+  authenticate,
+  verifyTenantAccess,
+  async (req, res) => {
+    try {
+      const integration = await Integration.findOne({
+        organizationId: req.organizationId,
+        provider: 'jira',
+        status: 'active',
+      });
+      if (integration) {
+        const backendUrl = process.env.BACKEND_API_URL || 'http://localhost:5000';
+        const webhookToken = integration.metadata?.webhookToken;
+        const webhookUrl = webhookToken
+          ? `${backendUrl}/api/webhooks/jira/${integration._id}/${webhookToken}`
+          : `${backendUrl}/api/webhooks/jira`;
+
+        return res.status(200).json({
+          connected: true,
+          siteName: integration.metadata?.siteName || 'Jira Cloud',
+          siteUrl: integration.metadata?.siteUrl || null,
+          integrationId: integration._id,
+          webhookUrl,
+        });
+      }
+      return res.status(200).json({ connected: false });
+    } catch (err) {
+      console.error('[jira/status] error:', err.message);
+      return res.status(500).json({ error: 'Internal server error.' });
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// GET /api/integrations/jira/projects
+// Fetches projects for the connected Jira Cloud site.
+// ---------------------------------------------------------------------------
+router.get(
+  '/jira/projects',
+  authenticate,
+  verifyTenantAccess,
+  requirePermission('manage_integrations'),
+  async (req, res) => {
+    const integration = await Integration.findOne({
+      organizationId: req.organizationId,
+      provider: 'jira',
+      status: 'active',
+    });
+    if (!integration?.accessToken) {
+      return res.status(404).json({ error: 'Jira not connected for this workspace.' });
+    }
+
+    try {
+      const jiraRes = await jiraRequest('/rest/api/3/project/search', integration);
+      if (!jiraRes.ok) {
+        const errText = await jiraRes.text();
+        console.error('[jira/projects] Jira API error:', jiraRes.status, errText);
+        return res.status(jiraRes.status).json({ error: 'Failed to fetch Jira projects.' });
+      }
+      const data = await jiraRes.json();
+      const projects = (data.values || data || []).map((p) => ({
+        id: p.id,
+        key: p.key,
+        name: p.name,
+        projectTypeKey: p.projectTypeKey,
+        avatarUrl: p.avatarUrls?.['48x48'] || null,
+      }));
+      return res.json(projects);
+    } catch (err) {
+      console.error('[jira/projects] error:', err.message);
+      return res.status(500).json({ error: 'Internal server error.' });
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// POST /api/integrations/jira/sync
+// Sync issues from selected Jira projects into PulseOps JiraIssue collection.
+// ---------------------------------------------------------------------------
+router.post(
+  '/jira/sync',
+  authenticate,
+  verifyTenantAccess,
+  requirePermission('manage_integrations'),
+  async (req, res) => {
+    const integration = await Integration.findOne({
+      organizationId: req.organizationId,
+      provider: 'jira',
+      status: 'active',
+    });
+    if (!integration?.accessToken) {
+      return res.status(404).json({ error: 'Jira not connected for this workspace.' });
+    }
+
+    const projectKeys = Array.isArray(req.body?.projectKeys) ? req.body.projectKeys : [];
+    if (projectKeys.length === 0) {
+      return res.status(400).json({ error: 'No Jira projects selected for sync.' });
+    }
+
+    try {
+      const escapedKeys = projectKeys.map((k) => `"${k.replace(/"/g, '\\"')}"`).join(', ');
+      const jql = `project IN (${escapedKeys}) ORDER BY updated DESC`;
+      const jiraRes = await jiraRequest(
+        `/rest/api/3/search?jql=${encodeURIComponent(jql)}&maxResults=100`,
+        integration
+      );
+
+      if (!jiraRes.ok) {
+        const errData = await jiraRes.text();
+        console.error('[jira/sync] Jira search API error:', jiraRes.status, errData);
+        return res.status(jiraRes.status).json({ error: 'Failed to search Jira issues.' });
+      }
+
+      const searchData = await jiraRes.json();
+      const issues = searchData.issues || [];
+
+      const syncedResults = [];
+      for (const issue of issues) {
+        const issueId = String(issue.id);
+        const jiraKey = issue.key;
+        const summary = issue.fields?.summary || '';
+        const status = issue.fields?.status?.name || 'Unknown';
+        const issueType = issue.fields?.issuetype?.name || null;
+        const priority = issue.fields?.priority?.name || null;
+        const assignee = issue.fields?.assignee?.displayName || null;
+        const projectKey = issue.fields?.project?.key || null;
+        const siteUrl = integration.metadata?.siteUrl;
+        const issueUrl = siteUrl && jiraKey ? `${siteUrl}/browse/${jiraKey}` : null;
+        const createdAt = issue.fields?.created ? new Date(issue.fields.created) : new Date();
+
+        await JiraIssue.findOneAndUpdate(
+          { organizationId: req.organizationId, jiraIssueId: issueId },
+          {
+            $set: {
+              jiraKey,
+              projectKey,
+              summary,
+              status,
+              issueType,
+              priority,
+              assignee,
+              url: issueUrl,
+              createdAt,
+            },
+          },
+          { upsert: true }
+        );
+        syncedResults.push({ issueId, jiraKey });
+      }
+
+      return res.json({ success: true, syncedCount: syncedResults.length });
+    } catch (err) {
+      console.error('[jira/sync] error:', err.message);
+      return res.status(500).json({ error: 'Internal server error.' });
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// POST /api/webhooks/jira/:integrationId/:webhookToken (Secure Webhook Path)
+// ---------------------------------------------------------------------------
+router.post('/jira/:integrationId/:webhookToken', jiraWebhookLimiter, async (req, res) => {
+  const { integrationId, webhookToken } = req.params;
+  const body = req.body || {};
+  const webhookEvent = body.webhookEvent || 'unknown';
+
+  try {
+    const integration = await Integration.findById(integrationId);
+    if (
+      !integration ||
+      integration.provider !== 'jira' ||
+      !integration.metadata?.webhookToken ||
+      integration.metadata.webhookToken !== webhookToken
+    ) {
+      return res.status(401).json({ error: 'Invalid or unauthorized webhook token.' });
+    }
+
+    const orgId = integration.organizationId;
+    const issue = body.issue;
+    const issueKey = issue?.key || 'N/A';
+
+    integration.lastWebhookEvent = webhookEvent;
+    integration.lastWebhookAt = new Date();
+    integration.lastWebhookId = issue?.id ? String(issue.id) : null;
+    await integration.save();
+
+    if (issue?.id) {
+      const siteUrl = integration.metadata?.siteUrl;
+      await JiraIssue.findOneAndUpdate(
+        { organizationId: orgId, jiraIssueId: String(issue.id) },
+        {
+          $set: {
+            jiraKey: issue.key,
+            projectKey: issue.fields?.project?.key,
+            summary: issue.fields?.summary || '',
+            status: issue.fields?.status?.name || 'Unknown',
+            issueType: issue.fields?.issuetype?.name || null,
+            priority: issue.fields?.priority?.name || null,
+            assignee: issue.fields?.assignee?.displayName || null,
+            url: siteUrl && issue.key ? `${siteUrl}/browse/${issue.key}` : null,
+            createdAt: issue.fields?.created ? new Date(issue.fields.created) : new Date(),
+          },
+        },
+        { upsert: true }
+      );
+    }
+
+    console.log(`[webhook/jira] org=${orgId} event=${webhookEvent} issue=${issueKey}`);
+    return res.status(200).json({ received: true, event: webhookEvent, issue: issueKey });
+  } catch (err) {
+    console.error('[webhook/jira] Error processing webhook:', err.message);
+    return res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/webhooks/jira  (Legacy Jira issue webhooks)
+// ---------------------------------------------------------------------------
+router.post('/jira', jiraWebhookLimiter, (req, res) => {
   const body = req.body || {};
   const webhookEvent = body.webhookEvent || 'unknown';
   const issueKey = body.issue?.key || 'N/A';

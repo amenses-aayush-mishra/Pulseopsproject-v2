@@ -321,11 +321,123 @@ function SlackPanel({ workspaceId }) {
 
 // ─── Jira Integration Panel ───────────────────────────────────────────────────
 
-function JiraPanel({ workspaceId }) {
-  const webhookUrl = `${API_BASE}/api/webhooks/jira`;
+// ─── Jira Integration Panel ───────────────────────────────────────────────────
+
+function JiraPanel({ workspaceId, token }) {
+  const [connecting, setConnecting] = useState(false);
+  const [projects, setProjects] = useState([]);
+  const [loadingProjects, setLoadingProjects] = useState(false);
+  const [selectedProjects, setSelectedProjects] = useState([]);
+  const [syncing, setSyncing] = useState(false);
+  const [syncSuccess, setSyncSuccess] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
+  const [connectError, setConnectError] = useState('');
+  const [siteName, setSiteName] = useState('');
+  const [siteUrl, setSiteUrl] = useState('');
+  const [webhookUrl, setWebhookUrl] = useState(`${API_BASE}/api/webhooks/jira`);
   const [copied, setCopied] = useState(false);
 
-  const copy = () => {
+  const loadStatus = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/integrations/jira/status`, {
+        headers: { Authorization: `Bearer ${token}`, 'x-organization-id': workspaceId },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.connected) {
+          setIsConnected(true);
+          if (data.siteName) setSiteName(data.siteName);
+          if (data.siteUrl) setSiteUrl(data.siteUrl);
+          if (data.webhookUrl) setWebhookUrl(data.webhookUrl);
+          loadProjects();
+        }
+      }
+    } catch {
+      // Ignore network errors for status check to prevent red alerts
+    }
+  };
+
+  useEffect(() => {
+    if (!token) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('connected') === 'jira') {
+      setIsConnected(true);
+      loadStatus();
+      loadProjects();
+      window.history.replaceState({}, '', window.location.pathname);
+    } else {
+      loadStatus();
+    }
+  }, [token]);
+
+  const loadProjects = async () => {
+    setLoadingProjects(true);
+    setConnectError('');
+    try {
+      const res = await fetch(`${API_BASE}/api/integrations/jira/projects`, {
+        headers: { Authorization: `Bearer ${token}`, 'x-organization-id': workspaceId },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setProjects(data);
+      } else {
+        const data = await res.json();
+        setConnectError(data?.error || 'Failed to load Jira projects.');
+      }
+    } catch {
+      setConnectError('Could not load projects from Jira.');
+    } finally {
+      setLoadingProjects(false);
+    }
+  };
+
+  const handleConnect = async () => {
+    setConnecting(true);
+    setConnectError('');
+    try {
+      const res = await fetch(`${API_BASE}/api/integrations/jira/connect`, {
+        headers: { Authorization: `Bearer ${token}`, 'x-organization-id': workspaceId },
+      });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        setConnectError(data.error || 'Could not initiate Jira connection.');
+        setConnecting(false);
+      }
+    } catch {
+      setConnectError('Could not reach the server.');
+      setConnecting(false);
+    }
+  };
+
+  const toggleProject = (key) =>
+    setSelectedProjects((prev) =>
+      prev.includes(key) ? prev.filter((p) => p !== key) : [...prev, key]
+    );
+
+  const handleSync = async () => {
+    if (selectedProjects.length === 0) return;
+    setSyncing(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/integrations/jira/sync`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'x-organization-id': workspaceId,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ projectKeys: selectedProjects }),
+      });
+      if (res.ok) setSyncSuccess(true);
+    } catch {
+      /* swallow */
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const copyWebhook = () => {
     navigator.clipboard.writeText(webhookUrl).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
@@ -336,33 +448,127 @@ function JiraPanel({ workspaceId }) {
     <IntegrationCard
       icon={<JiraIcon />}
       title="Jira"
-      description="Track issues and receive updates when Jira issues are created or updated."
-      badge={
-        <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">
-          Webhook
-        </span>
-      }
+      description="Sync projects, track issues, and receive automated event updates."
+      badge={isConnected ? <ConnectedBadge /> : undefined}
       action={
-        <div className="space-y-3">
-          <p className="text-sm text-slate-600">
-            In your Jira project, go to <strong>Project Settings → Webhooks</strong> and add the URL below. Select the <em>Issue Created</em> and <em>Issue Updated</em> event types.
-          </p>
-          <div className="flex items-center gap-2">
-            <code className="flex-1 truncate rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-700 font-mono">
-              {webhookUrl}
-            </code>
+        !isConnected ? (
+          <div className="space-y-3">
+            {connectError && (
+              <p className="text-sm text-rose-600">{connectError}</p>
+            )}
             <button
-              onClick={copy}
-              className="shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50"
+              onClick={handleConnect}
+              disabled={connecting}
+              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-60"
             >
-              {copied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
-              {copied ? 'Copied' : 'Copy'}
+              {connecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <JiraIcon />}
+              Connect Jira
             </button>
           </div>
-          <p className="text-xs text-slate-500">
-            Supported events: <code className="rounded bg-slate-100 px-1 py-0.5">jira:issue_created</code>, <code className="rounded bg-slate-100 px-1 py-0.5">jira:issue_updated</code>.
-          </p>
-        </div>
+        ) : (
+          <div className="space-y-6">
+            {siteName && (
+              <div className="flex items-center justify-between rounded-lg bg-slate-50 border border-slate-200 px-4 py-3 text-xs text-slate-600">
+                <span>Site: <strong className="text-slate-900 font-semibold">{siteName}</strong></span>
+                {siteUrl && (
+                  <a
+                    href={siteUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 hover:underline"
+                  >
+                    Open site ↗
+                  </a>
+                )}
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-semibold text-slate-900">Select Jira projects to track</h4>
+                <button
+                  onClick={loadProjects}
+                  className="text-xs text-indigo-600 hover:underline"
+                >
+                  Refresh
+                </button>
+              </div>
+              {connectError && <p className="text-sm text-rose-600">{connectError}</p>}
+              {loadingProjects ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-slate-300" />
+                </div>
+              ) : syncSuccess ? (
+                <div className="rounded-lg bg-emerald-50 border border-emerald-100 p-4 text-sm font-medium text-emerald-800">
+                  ✓ Synced issues from {selectedProjects.length} {selectedProjects.length === 1 ? 'project' : 'projects'} successfully.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="rounded-lg border border-slate-200 divide-y divide-slate-100 overflow-hidden max-h-60 overflow-y-auto">
+                    {projects.length === 0 && (
+                      <p className="p-4 text-sm text-slate-400">No Jira projects found.</p>
+                    )}
+                    {projects.map((proj) => (
+                      <label
+                        key={proj.id || proj.key}
+                        className="flex cursor-pointer items-center gap-4 px-4 py-3 hover:bg-slate-50 transition-colors"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedProjects.includes(proj.key)}
+                          onChange={() => toggleProject(proj.key)}
+                          className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-slate-900 truncate flex items-center gap-2">
+                            {proj.name}
+                            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600 font-mono">
+                              {proj.key}
+                            </span>
+                          </p>
+                          {proj.projectTypeKey && (
+                            <p className="text-xs text-slate-500 mt-0.5 capitalize">
+                              {proj.projectTypeKey} project
+                            </p>
+                          )}
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                  <div className="flex justify-end">
+                    <button
+                      onClick={handleSync}
+                      disabled={selectedProjects.length === 0 || syncing}
+                      className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700 disabled:opacity-60"
+                    >
+                      {syncing && <Loader2 className="h-4 w-4 animate-spin" />}
+                      Sync Selected ({selectedProjects.length})
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="border-t border-slate-100 pt-4 space-y-3">
+              <p className="text-xs font-semibold text-slate-700">Organization Webhook URL</p>
+              <p className="text-xs text-slate-500">
+                To stream real-time issue updates, copy this webhook URL into your Jira site or project settings under <strong>Webhooks</strong>:
+              </p>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 truncate rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-700 font-mono">
+                  {webhookUrl}
+                </code>
+                <button
+                  onClick={copyWebhook}
+                  className="shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                >
+                  {copied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+                  {copied ? 'Copied' : 'Copy'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )
       }
     />
   );
@@ -388,7 +594,7 @@ export default function IntegrationsPage({ params }) {
 
       <GitHubPanel workspaceId={workspaceId} token={token} />
       <SlackPanel workspaceId={workspaceId} />
-      <JiraPanel workspaceId={workspaceId} />
+      <JiraPanel workspaceId={workspaceId} token={token} />
     </div>
   );
 }
