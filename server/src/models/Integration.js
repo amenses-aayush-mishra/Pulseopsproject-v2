@@ -11,6 +11,9 @@ const integrationSchema = new Schema({
   state: { type: String },
   accessToken: { type: String },
   refreshToken: { type: String },
+  slackChannelId: { type: String, default: null },
+  slackChannelName: { type: String, default: null },
+  slackTeamName: { type: String, default: null },
   metadata: { type: Schema.Types.Mixed, default: {} },
   // TASK-108 — webhook activity trail (updated by POST /api/integrations/:provider/webhook).
   lastWebhookEvent: { type: String, default: null },
