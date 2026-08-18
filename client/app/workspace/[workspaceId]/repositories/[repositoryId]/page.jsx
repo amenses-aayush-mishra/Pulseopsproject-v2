@@ -16,6 +16,7 @@ import RepositoryMetadata from './components/RepositoryMetadata';
 
 const API_BASE = process.env.NEXT_PUBLIC_EXPRESS_API_URL || 'http://localhost:5000';
 
+export default function RepositoryDetailsPage({ params }) {
 const { workspaceId, repositoryId } = params;
 const { data: session } = useSession();
 const token =
@@ -197,3 +198,4 @@ return (
     {/* Report card removed — this page is 100% GitHub-focused */}
   </div>
 );
+}

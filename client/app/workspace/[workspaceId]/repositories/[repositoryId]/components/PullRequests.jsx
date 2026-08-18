@@ -5,7 +5,6 @@ import {
   SectionTitle,
   Card,
   EmptyState,
-  PrStat,
 } from './primitives';
 
 /** Pull Requests: title, number, status (open/merged/closed, visually distinct),
