@@ -138,7 +138,7 @@ export function SectionTitle({ icon: Icon, children, aside }) {
   return (
     <div className="flex items-center justify-between px-5 pt-5">
       <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-        <Icon className="h-4 w-4 text-slate-400" />
+        {Icon && <Icon className="h-4 w-4 text-slate-400" />}
         {children}
       </h3>
       {aside}
@@ -149,7 +149,7 @@ export function SectionTitle({ icon: Icon, children, aside }) {
 export function EmptyState({ icon: Icon, title, hint }) {
   return (
     <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/40 px-4 py-8 text-center">
-      <Icon className="mx-auto h-5 w-5 text-slate-300" />
+      {Icon && <Icon className="mx-auto h-5 w-5 text-slate-300" />}
       <p className="mt-2 text-sm font-medium text-slate-500">{title}</p>
       {hint && <p className="mt-1 text-xs text-slate-400">{hint}</p>}
     </div>

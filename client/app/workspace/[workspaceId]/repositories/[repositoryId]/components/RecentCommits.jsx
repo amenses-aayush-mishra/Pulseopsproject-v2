@@ -1,6 +1,7 @@
 'use client';
 
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink, GitBranch } from 'lucide-react';
+
 import {
   formatAgo,
   GitHubIcon,
@@ -10,7 +11,6 @@ import {
   Skeleton,
   EmptyState,
 } from './primitives';
-
 /** Recent Commits: message, short SHA, author + avatar, date, branch,
  * files changed/additions+deletions if available. Clickable rows → GitHub
  * commit URL. Limit = 8 (matches backend slice). */
