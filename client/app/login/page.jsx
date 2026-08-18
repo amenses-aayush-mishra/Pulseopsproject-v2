@@ -194,8 +194,10 @@ function LoginInner() {
         ? `/workspace/${wsId}`
         : '/onboarding';
     } else {
-      // 2+ workspaces — let the user choose.
-      window.location.href = '/select-workspace';
+      // 2+ workspaces — land in the active workspace shell; workspace
+      // switching is available there via the dashboard switcher.
+      const wsId = u.activeOrganizationId || (u.workspaces?.[0]?.id ?? null);
+      window.location.href = wsId ? `/workspace/${wsId}` : '/onboarding';
     }
   }
 }, [status, session, router, busy]);
@@ -244,11 +246,15 @@ function LoginInner() {
   if (targetOrg) {
     window.location.href = `/workspace/${targetOrg}/invitations`;
   } else {
-    window.location.href = '/select-workspace';
+    window.location.href = activeOrganizationId
+      ? `/workspace/${activeOrganizationId}`
+      : '/onboarding';
   }
 } else if (hasWorkspace) {
-        // CASE 1: Existing User -> Route to Workspace Selector
-        window.location.href = '/select-workspace';
+        // CASE 1: Existing User -> land in the active workspace shell (the
+        // dashboard switcher provides workspace switching from there).
+        const wsId = activeOrganizationId || user.workspaces?.[0]?.id;
+        window.location.href = wsId ? `/workspace/${wsId}` : '/onboarding';
       } else {
         // CASE 3: New User -> Route to Onboarding
         window.location.href = '/onboarding';
@@ -278,7 +284,7 @@ function LoginInner() {
       if (orgEmail) cb.searchParams.set('orgEmail', orgEmail);
       if (inviteToken) cb.searchParams.set('inviteToken', inviteToken);
       await signIn(provider, {
-        callbackUrl: '/select-workspace',
+        callbackUrl: '/workspace',
         ...(orgEmail ? { email: orgEmail } : {}),
       });
     } catch (err) {

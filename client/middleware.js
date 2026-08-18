@@ -101,13 +101,9 @@ export async function middleware(req) {
       if (req.nextUrl.searchParams.get('inviteToken')) {
         return NextResponse.next();
       }
-      const wCount = token.workspaceCount ?? 1;
       const url = req.nextUrl.clone();
       url.search = '';
-      url.pathname =
-        wCount > 1
-          ? '/select-workspace'
-          : `/workspace/${token.activeOrganizationId}`;
+      url.pathname = `/workspace/${token.activeOrganizationId}`;
       return NextResponse.redirect(url);
     }
     return NextResponse.next();
