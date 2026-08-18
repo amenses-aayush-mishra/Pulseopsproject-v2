@@ -1,7 +1,8 @@
 'use client';
 
 import { Suspense, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { signIn } from 'next-auth/react';
 
 // Backend API base. The spec-facing var is NEXT_PUBLIC_EXPRESS_API_URL; fall
 // back to NEXT_PUBLIC_API_URL (used by /login, /onboarding, /dashboard) and
@@ -48,6 +49,7 @@ function Banner({ kind, children }) {
 }
 
 function RegisterInner() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   // Prefill the email when arriving from an invite-locked /login
   // ("Don't have an account? Sign up" keeps ?orgEmail=…).
@@ -58,7 +60,6 @@ function RegisterInner() {
   const [confirm, setConfirm] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
   const [error, setError] = useState(null);
-  const [success, setSuccess] = useState(null); // { message, hasPendingInvite }
   const [busy, setBusy] = useState(false);
 
   const validate = () => {
@@ -77,7 +78,7 @@ function RegisterInner() {
   const onSubmit = async (e) => {
     e.preventDefault();
     setError(null);
-    if (busy || success) return;
+    if (busy) return;
     if (!validate()) return;
     setBusy(true);
     try {
@@ -91,11 +92,35 @@ function RegisterInner() {
         setError({ message: data?.message || `Registration failed (${res.status}).` });
         return;
       }
-      setSuccess({
-        message:
-          data?.message || 'Account registered! Please check your email for a verification link.',
-        hasPendingInvite: Boolean(data?.hasPendingInvite),
+
+      // Auto-login: establish the NextAuth session with the same mechanism as
+      // /login so the new account can continue directly into /onboarding.
+      const result = await signIn('credentials', {
+        redirect: false,
+        email: email.trim(),
+        password,
       });
+      if (!result?.ok) {
+        setError({
+          message:
+            result?.error || 'Account created, but automatic sign-in failed. Please sign in.',
+        });
+        return;
+      }
+
+      // Store the bearer token used by components bypassing NextAuth.
+      const sessionRes = await fetch('/api/auth/session');
+      const sessionData = await sessionRes.json().catch(() => ({}));
+      if (sessionData?.accessToken) {
+        try {
+          localStorage.setItem('pulseops_token', sessionData.accessToken);
+        } catch (storageErr) {
+          // storage unavailable — proceed; onboarding is gated by the session.
+        }
+      }
+
+      // Continue straight to onboarding (no email-verification step).
+      router.replace('/onboarding');
     } catch (err) {
       setError({ message: 'Could not reach the authentication server. Please try again.' });
     } finally {
@@ -124,29 +149,12 @@ function RegisterInner() {
             <p className="mt-1 text-sm text-slate-500">Create your account</p>
           </div>
 
-          {success ? (
-            <div className="space-y-3">
-              <Banner kind="success">{success.message}</Banner>
-              {success.hasPendingInvite && (
-                <p className="text-sm text-slate-500">
-                  You also have a pending organization invitation — after verifying your email,
-                  sign in with the invited address.
-                </p>
-              )}
-              <a
-                href="/login"
-                className="block w-full rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-600 px-4 py-2.5 text-center text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 transition-opacity hover:opacity-90"
-              >
-                Go to Sign In
-              </a>
-            </div>
-          ) : (
-            <form onSubmit={onSubmit} noValidate>
-              {error && (
-                <div className="mb-4">
-                  <Banner kind="error">{error.message}</Banner>
-                </div>
-              )}
+          <form onSubmit={onSubmit} noValidate>
+            {error && (
+              <div className="mb-4">
+                <Banner kind="error">{error.message}</Banner>
+              </div>
+            )}
 
               <div className="mb-4">
                 <div className="relative">
@@ -220,7 +228,6 @@ function RegisterInner() {
                 {busy ? 'Creating account…' : 'Create Account'}
               </button>
             </form>
-          )}
         </div>
 
         <p className="mt-5 text-center text-sm text-slate-500">
