@@ -630,13 +630,17 @@ router.post(
       return res.status(400).json({ error: 'No Jira projects selected for sync.' });
     }
 
-    try {
-      const escapedKeys = projectKeys.map((k) => `"${k.replace(/"/g, '\\"')}"`).join(', ');
-      const jql = `project IN (${escapedKeys}) ORDER BY updated DESC`;
-      const jiraRes = await jiraRequest(
-        `/rest/api/3/search?jql=${encodeURIComponent(jql)}&maxResults=100`,
-        integration
-      );
+  try {
+  const escapedKeys = projectKeys
+    .map((k) => `"${k.replace(/"/g, '\\"')}"`)
+    .join(', ');
+
+  const jql = `project IN (${escapedKeys}) ORDER BY updated DESC`;
+
+  const jiraRes = await jiraRequest(
+    `/rest/api/3/search/jql?jql=${encodeURIComponent(jql)}&maxResults=100`,
+    integration
+  );
 
       if (!jiraRes.ok) {
         const errData = await jiraRes.text();

@@ -11,6 +11,7 @@ const authRoutes = require('./src/routes/authRoutes');
 const orgRoutes = require('./src/routes/orgRoutes');
 const integrationRoutes = require('./src/routes/integrationRoutes');
 const repositoryRoutes = require('./src/routes/repositoryRoutes');
+const taskRoutes = require('./src/routes/taskRoutes');
 const securityHeaders = require('./src/middleware/securityHeaders');
 const errorHandler = require('./src/middleware/errorHandler');
 
@@ -61,6 +62,9 @@ app.use('/api/integrations', integrationRoutes);
 
 // Repositories module — lists imported GitHub repositories for a workspace.
 app.use('/api/repositories', repositoryRoutes);
+
+// Tasks module — lists Jira-synced issues for a workspace.
+app.use('/api/tasks', taskRoutes);
 
 // Webhook routes (GitHub, Slack, Jira) — raw-body access is already set up
 // by the express.json verify callback above, so these share the same parser.
