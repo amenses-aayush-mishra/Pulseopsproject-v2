@@ -271,55 +271,174 @@ function GitHubPanel({ workspaceId, token }) {
 }
 
 // ─── Slack Integration Panel ──────────────────────────────────────────────────
+//
+// Phase 3: OAuth connect + status + test message. `token` here is strictly
+// the existing PulseOps application bearer token (identical to what
+// GitHubPanel receives) — the backend never returns any Slack credential
+// (webhook URL, decrypted or otherwise) in any response this panel reads.
 
-function SlackPanel({ workspaceId }) {
-  const webhookUrl = `${API_BASE}/api/webhooks/slack`;
-  const [copied, setCopied] = useState(false);
+function SlackPanel({ workspaceId, token }) {
+  const [statusLoading, setStatusLoading] = useState(true);
+  const [isConnected, setIsConnected] = useState(false);
+  const [teamName, setTeamName] = useState('');
+  const [channelName, setChannelName] = useState('');
+  const [connecting, setConnecting] = useState(false);
+  const [connectError, setConnectError] = useState('');
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState(null); // { ok: boolean, message: string }
+  console.log('[SlackPanel] RENDER', {
+    workspaceId,
+    hasToken: Boolean(token),
+    statusLoading,
+    isConnected,
+  });
 
-  const copy = () => {
-    navigator.clipboard.writeText(webhookUrl).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
+  const loadStatus = async () => {
+    setStatusLoading(true);
+    console.log('[SlackPanel] loadStatus START');
+    try {
+      const res = await fetch(`${API_BASE}/api/integrations/slack/status`, {
+        headers: { Authorization: `Bearer ${token}`, 'x-organization-id': workspaceId },
+      });
+      console.log('[SlackPanel] status response', res.status);
+      if (res.ok) {
+        const data = await res.json();
+        setIsConnected(Boolean(data.connected));
+        setTeamName(data.teamName || '');
+        setChannelName(data.channelName || '');
+      }
+    } catch (error) {
+      // Ignore network errors for status check, mirrors GitHubPanel's loadStatus
+      console.error('[SlackPanel] status error', error);
+    } finally {
+      console.log('[SlackPanel] loadStatus FINALLY → false');
+      setStatusLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    console.log('[SlackPanel] EFFECT RUN');
+    if (!token) {
+      console.log('[SlackPanel] NO TOKEN');
+      setStatusLoading(false);
+      return;
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('connected') === 'slack') {
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+    loadStatus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => {
+      console.log('[SlackPanel] UNMOUNT / EFFECT CLEANUP');
+    };
+  }, [token]);
+
+  const handleConnect = async () => {
+    setConnecting(true);
+    setConnectError('');
+    try {
+      const res = await fetch(`${API_BASE}/api/integrations/slack/authorize`, {
+        headers: { Authorization: `Bearer ${token}`, 'x-organization-id': workspaceId },
+      });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        setConnectError(data.error || 'Could not initiate Slack connection.');
+        setConnecting(false);
+      }
+    } catch {
+      setConnectError('Could not reach the server.');
+      setConnecting(false);
+    }
+  };
+
+  const handleTestMessage = async () => {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/integrations/slack/test`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'x-organization-id': workspaceId },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        setTestResult({ ok: true, message: data.message || 'Test message sent to Slack.' });
+      } else {
+        setTestResult({ ok: false, message: data.error || 'Failed to send test message.' });
+      }
+    } catch {
+      setTestResult({ ok: false, message: 'Could not reach the server.' });
+    } finally {
+      setTesting(false);
+    }
   };
 
   return (
     <IntegrationCard
       icon={<SlackIcon />}
       title="Slack"
-      description="Receive PulseOps notifications in your Slack workspace."
-      badge={
-        <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">
-          Webhook
-        </span>
-      }
+      description="Connect a Slack channel to receive PulseOps notifications."
+      badge={isConnected ? <ConnectedBadge /> : undefined}
       action={
-        <div className="space-y-3">
-          <p className="text-sm text-slate-600">
-            Copy the webhook URL below and add it as a <strong>Incoming Webhook</strong> in your Slack App configuration or as a Slack Event Subscription URL.
-          </p>
-          <div className="flex items-center gap-2">
-            <code className="flex-1 truncate rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-700 font-mono">
-              {webhookUrl}
-            </code>
+        statusLoading ? (
+          <div className="flex justify-center py-6">
+            <Loader2 className="h-6 w-6 animate-spin text-slate-300" />
+          </div>
+        ) : !isConnected ? (
+          <div className="space-y-3">
+            {connectError && <p className="text-sm text-rose-600">{connectError}</p>}
             <button
-              onClick={copy}
-              className="shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50"
+              onClick={handleConnect}
+              disabled={connecting}
+              className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-slate-700 disabled:opacity-60"
             >
-              {copied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
-              {copied ? 'Copied' : 'Copy'}
+              {connecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <SlackIcon />}
+              Connect Slack
             </button>
           </div>
-          <p className="text-xs text-slate-500">
-            The endpoint handles Slack URL verification challenges and event callbacks automatically.
-          </p>
-        </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+              <p>
+                <span className="font-medium text-slate-900">Workspace:</span>{' '}
+                {teamName || '—'}
+              </p>
+              <p className="mt-1">
+                <span className="font-medium text-slate-900">Channel:</span>{' '}
+                {channelName ? `#${channelName}` : '—'}
+              </p>
+            </div>
+
+            {testResult && (
+              <div
+                role={testResult.ok ? 'status' : 'alert'}
+                className={`rounded-lg border px-4 py-3 text-sm font-medium ${testResult.ok
+                  ? 'border-emerald-100 bg-emerald-50 text-emerald-800'
+                  : 'border-rose-200 bg-rose-50 text-rose-700'
+                  }`}
+              >
+                {testResult.ok ? '✓ ' : ''}
+                {testResult.message}
+              </div>
+            )}
+
+            <button
+              onClick={handleTestMessage}
+              disabled={testing}
+              className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700 disabled:opacity-60"
+            >
+              {testing && <Loader2 className="h-4 w-4 animate-spin" />}
+              Send Test Message
+            </button>
+          </div>
+        )
       }
     />
   );
 }
-
-// ─── Jira Integration Panel ───────────────────────────────────────────────────
 
 // ─── Jira Integration Panel ───────────────────────────────────────────────────
 
@@ -593,7 +712,7 @@ export default function IntegrationsPage({ params }) {
       </div>
 
       <GitHubPanel workspaceId={workspaceId} token={token} />
-      <SlackPanel workspaceId={workspaceId} />
+      <SlackPanel workspaceId={workspaceId} token={token} />
       <JiraPanel workspaceId={workspaceId} token={token} />
     </div>
   );

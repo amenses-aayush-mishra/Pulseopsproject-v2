@@ -8,7 +8,7 @@ const Organization = require('../models/Organization');
 const OrganizationMember = require('../models/OrganizationMember');
 const Invitation = require('../models/Invitation');
 const authenticate = require('../middleware/authenticate');
-const { sendMail, transporter } = require('../utils/mailer');
+const { transporter } = require('../utils/mailer');
 
 const router = express.Router();
 
@@ -131,24 +131,6 @@ const applyInvitation = async (user, inviteToken) => {
   return { ok: true };
 };
 
-const sendVerificationEmail = async (to, rawToken) => {
-  const frontendUrl =
-    process.env.FRONTEND_URL || process.env.CLIENT_URL || 'http://localhost:3000';
-  const link = `${frontendUrl}/verify-email?token=${encodeURIComponent(rawToken)}`;
-  await sendMail({
-    to,
-    subject: 'Verify your PulseOps account',
-    html: `
-      <div style="font-family:sans-serif;max-width:480px;margin:auto">
-        <h2 style="color:#4f46e5">Welcome to PulseOps</h2>
-        <p>Click the button below to verify your email address. This link expires in 24 hours.</p>
-        <a href="${link}" style="display:inline-block;margin-top:12px;padding:12px 24px;background:#4f46e5;color:#fff;border-radius:8px;text-decoration:none;font-weight:600">Verify Email</a>
-        <p style="margin-top:24px;font-size:12px;color:#6b7280">Or paste this link into your browser:<br/><a href="${link}">${link}</a></p>
-      </div>`,
-    text: `Verify your PulseOps account: ${link}`,
-  });
-};
-
 // ---------------------------------------------------------------------------
 // POST /api/auth/register
 // ---------------------------------------------------------------------------
@@ -182,26 +164,13 @@ router.post('/register', authRateLimiter, async (req, res) => {
 
     const passwordHash = await bcrypt.hash(password, 12);
 
-    const rawToken = crypto.randomBytes(32).toString('hex');
-    const tokenHash = sha256(rawToken);
-    const verificationTokenExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
-
     const user = await User.create({
       name,
       email,
       passwordHash,
-      isVerified: false,
-      verificationTokenHash: tokenHash,
-      verificationTokenExpires,
+      isVerified: true,
       authProvider: 'credentials',
     });
-
-    try {
-      await sendVerificationEmail(user.email, rawToken);
-    } catch (mailErr) {
-      // Registration remains valid; email failure must not leak stack traces.
-      console.error('Verification email send failed:', mailErr.message);
-    }
 
     return res.status(201).json(
       pendingInvite
@@ -210,7 +179,7 @@ router.post('/register', authRateLimiter, async (req, res) => {
             hasPendingInvite: true,
           }
         : {
-            message: 'Registration successful. Please check your email to verify your account.',
+            message: 'Registration successful.',
             hasPendingInvite: false,
           }
     );
