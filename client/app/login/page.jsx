@@ -436,6 +436,15 @@ function LoginInner() {
                 </label>
               </div>
 
+              <div className="flex justify-end">
+                <a
+                  href="/forgot-password"
+                  className="text-xs font-medium text-indigo-600 underline-offset-2 hover:underline"
+                >
+                  Forgot password?
+                </a>
+              </div>
+
               <button
                 type="submit"
                 disabled={busy}

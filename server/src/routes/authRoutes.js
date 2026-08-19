@@ -5,6 +5,7 @@ const jwt = require('jsonwebtoken');
 
 const User = require('../models/User');
 const PendingRegistration = require('../models/PendingRegistration');
+const PasswordReset = require('../models/PasswordReset');
 const Organization = require('../models/Organization');
 const OrganizationMember = require('../models/OrganizationMember');
 const Invitation = require('../models/Invitation');
@@ -51,6 +52,26 @@ const sendOtpEmail = async (email, otp) => {
         <p style="margin-top:16px;font-size:12px;color:#6b7280">If you didn't create a PulseOps account, you can safely ignore this email.</p>
       </div>`,
     text: `Welcome to PulseOps! Your email verification code is: ${otp}. It expires in 10 minutes.`,
+  });
+};
+
+/**
+ * Sends the password-reset OTP email, following the same inline-HTML style as
+ * the email-verification / invite emails. Email failure is non-fatal for the
+ * API response (dev flow).
+ */
+const sendPasswordResetEmail = async (email, otp) => {
+  await transporter.sendMail({
+    to: email,
+    subject: 'Your PulseOps password reset code',
+    html: `
+      <div style="font-family:sans-serif;max-width:480px;margin:auto">
+        <h2 style="color:#4f46e5">Reset your PulseOps password</h2>
+        <p>Use the 6-digit code below to reset your password. It expires in 10 minutes.</p>
+        <div style="background:#f1f5f9;border-radius:8px;padding:12px 20px;font-size:24px;font-family:monospace;letter-spacing:6px;font-weight:bold">${otp}</div>
+        <p style="margin-top:16px;font-size:12px;color:#6b7280">If you didn't request a password reset, you can safely ignore this email.</p>
+      </div>`,
+    text: `Your PulseOps password reset code is: ${otp}. It expires in 10 minutes.`,
   });
 };
 
@@ -411,6 +432,199 @@ router.post('/resend-otp', authRateLimiter, async (req, res) => {
     });
   } catch (error) {
     console.error('Resend OTP error:', error.message);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/auth/forgot-password
+// Body: { email }. Sends a password-reset OTP (SHA-256 hash stored in its own
+// model, ~10 min expiry). Returns a generic response whether or not an account
+// exists, so it never reveals existence — and never returns/logs the OTP.
+// ---------------------------------------------------------------------------
+router.post('/forgot-password', authRateLimiter, async (req, res) => {
+  try {
+    const email = String(req.body.email || '').toLowerCase().trim();
+
+    if (!email || !EMAIL_RE.test(email)) {
+      return res.status(400).json({ message: 'A valid email is required.' });
+    }
+
+    const user = await User.findOne({ email });
+    if (user) {
+      const otp = generateOtp();
+      await PasswordReset.findOneAndUpdate(
+        { email },
+        {
+          $set: {
+            userId: user._id,
+            otpHash: sha256(otp),
+            expiresAt: new Date(Date.now() + OTP_TTL_MS),
+            resetTokenHash: null,
+            resetTokenExpires: null,
+          },
+        },
+        { upsert: true, new: true }
+      );
+      try {
+        await sendPasswordResetEmail(email, otp);
+      } catch (mailErr) {
+        console.error('[forgot-password] Email send failed:', mailErr.message);
+      }
+    }
+
+    return res.status(200).json({
+      message: 'If an account exists for this email, a verification code has been sent.',
+    });
+  } catch (error) {
+    console.error('Forgot password error:', error.message);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/auth/verify-password-reset-otp
+// Body: { email, otp }. On a correct, unexpired OTP, issues a short-lived
+// one-time reset token (only its SHA-256 hash is stored) and consumes the OTP.
+// Does NOT change the password, log anyone in, or issue a JWT/session.
+// ---------------------------------------------------------------------------
+router.post('/verify-password-reset-otp', authRateLimiter, async (req, res) => {
+  try {
+    const email = String(req.body.email || '').toLowerCase().trim();
+    const otp = typeof req.body.otp === 'string' ? req.body.otp.trim() : '';
+
+    if (!email || !EMAIL_RE.test(email)) {
+      return res.status(400).json({ message: 'A valid email is required.' });
+    }
+    if (!OTP_RE.test(otp)) {
+      return res.status(400).json({ message: 'Verification code must be 6 digits.' });
+    }
+
+    const record = await PasswordReset.findOne({
+      email,
+      otpHash: sha256(otp),
+      expiresAt: { $gt: new Date() },
+    });
+
+    if (!record) {
+      return res.status(400).json({ message: 'Invalid or expired verification code.' });
+    }
+
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    record.otpHash = null; // consume the OTP
+    record.expiresAt = null;
+    record.resetTokenHash = sha256(resetToken);
+    record.resetTokenExpires = new Date(Date.now() + OTP_TTL_MS);
+    await record.save();
+
+    return res.status(200).json({
+      message: 'Verification successful. Set a new password.',
+      resetToken,
+    });
+  } catch (error) {
+    console.error('Verify password reset OTP error:', error.message);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/auth/reset-password
+// Body: { email, resetToken, password }. Consumes the one-time reset token,
+// hashes the new password with the existing mechanism, updates the user, and
+// deletes the reset record. Does NOT log the user in.
+// ---------------------------------------------------------------------------
+router.post('/reset-password', authRateLimiter, async (req, res) => {
+  try {
+    const email = String(req.body.email || '').toLowerCase().trim();
+    const resetToken =
+      typeof req.body.resetToken === 'string' ? req.body.resetToken.trim() : '';
+    const password = typeof req.body.password === 'string' ? req.body.password : '';
+
+    if (!email || !EMAIL_RE.test(email)) {
+      return res.status(400).json({ message: 'A valid email is required.' });
+    }
+    if (!resetToken) {
+      return res
+        .status(400)
+        .json({ message: 'Invalid or expired reset session. Please request a new code.' });
+    }
+    if (!password || password.length < 8) {
+      return res.status(400).json({ message: 'Password must be at least 8 characters.' });
+    }
+
+    const record = await PasswordReset.findOne({
+      email,
+      resetTokenHash: sha256(resetToken),
+      resetTokenExpires: { $gt: new Date() },
+    });
+    if (!record) {
+      return res
+        .status(400)
+        .json({ message: 'Invalid or expired reset session. Please request a new code.' });
+    }
+
+    const user = await User.findById(record.userId);
+    if (!user) {
+      // Stale record for a missing user — clean up and stay generic.
+      await PasswordReset.deleteOne({ _id: record._id });
+      return res
+        .status(400)
+        .json({ message: 'Invalid or expired reset session. Please request a new code.' });
+    }
+
+    user.passwordHash = await bcrypt.hash(password, 10);
+    user.mustChangePassword = false;
+    await user.save();
+
+    await PasswordReset.deleteOne({ _id: record._id }); // invalidate immediately
+
+    return res.status(200).json({
+      message: 'Password changed successfully. You can now sign in.',
+    });
+  } catch (error) {
+    console.error('Reset password error:', error.message);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/auth/resend-password-otp
+// Body: { email }. Regenerates the password-reset OTP (10 min expiry),
+// invalidating the previous OTP and any pending reset token. Never returns or
+// logs the OTP and never creates duplicate reset records (unique email).
+// ---------------------------------------------------------------------------
+router.post('/resend-password-otp', authRateLimiter, async (req, res) => {
+  try {
+    const email = String(req.body.email || '').toLowerCase().trim();
+
+    if (!email || !EMAIL_RE.test(email)) {
+      return res.status(400).json({ message: 'A valid email is required.' });
+    }
+
+    const record = await PasswordReset.findOne({ email });
+    if (record) {
+      const otp = generateOtp();
+      record.otpHash = sha256(otp);
+      record.expiresAt = new Date(Date.now() + OTP_TTL_MS);
+      record.resetTokenHash = null;
+      record.resetTokenExpires = null;
+      await record.save();
+      try {
+        await sendPasswordResetEmail(email, otp);
+      } catch (mailErr) {
+        console.error('[resend-password-otp] Email send failed:', mailErr.message);
+      }
+      return res.status(200).json({
+        message: 'A new verification code has been sent to your email.',
+      });
+    }
+
+    // No active reset request — respond generically to avoid revealing anything.
+    return res.status(200).json({
+      message: 'If an account exists for this email, a verification code has been sent.',
+    });
+  } catch (error) {
+    console.error('Resend password OTP error:', error.message);
     return res.status(500).json({ message: 'Internal server error' });
   }
 });
