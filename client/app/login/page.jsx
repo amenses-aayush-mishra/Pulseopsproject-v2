@@ -46,7 +46,7 @@ function LockedBanner({ orgEmail }) {
   );
 }
 
-function ErrorBanner({ error }) {
+function ErrorBanner({ error, email }) {
   if (!error) return null;
   const isMismatch = error.code === 'INVITATION_EMAIL_MISMATCH';
   const isUnverified = error.code === 'EMAIL_NOT_VERIFIED';
@@ -64,6 +64,16 @@ function ErrorBanner({ error }) {
       {isMismatch
         ? `This invitation is locked to a different email. Sign in with the exact invited address (${error.message}).`
         : error.message}
+      {isUnverified && (
+        <div className="mt-2">
+          <a
+            href={`/verify-email?email=${encodeURIComponent(email || '')}`}
+            className="font-semibold text-amber-800 underline underline-offset-2 hover:text-amber-900"
+          >
+            Resend verification code
+          </a>
+        </div>
+      )}
     </div>
   );
 }
@@ -217,7 +227,14 @@ function LoginInner() {
       });
 
       if (!result?.ok) {
-        setError({ message: result?.error || 'Login failed.' });
+        // NextAuth only surfaces the backend message (custom `code` is lost in
+        // the credentials redirect), so map the deterministic unverified-account
+        // message back to its code to drive the amber banner + resend-OTP link.
+        const msg = result?.error || 'Login failed.';
+        setError({
+          message: msg,
+          code: msg.includes('Email not verified') ? 'EMAIL_NOT_VERIFIED' : undefined,
+        });
         return;
       }
 
@@ -368,7 +385,7 @@ function LoginInner() {
             </div>
           )}
           <div className="mb-4">
-            <ErrorBanner error={error} />
+            <ErrorBanner error={error} email={email} />
           </div>
 
           {tab === 'credentials' ? (

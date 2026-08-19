@@ -2,7 +2,7 @@
 
 import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { signIn } from 'next-auth/react';
+import { setPendingSignup, takePendingSignup } from '../../lib/pendingSignup';
 
 // Backend API base. The spec-facing var is NEXT_PUBLIC_EXPRESS_API_URL; fall
 // back to NEXT_PUBLIC_API_URL (used by /login, /onboarding, /dashboard) and
@@ -55,15 +55,21 @@ function RegisterInner() {
   // ("Don't have an account? Sign up" keeps ?orgEmail=…).
   const orgEmail = sanitizeParam(searchParams.get('orgEmail'));
 
-  const [email, setEmail] = useState(() => (orgEmail ? orgEmail : ''));
-  const [password, setPassword] = useState('');
-  const [confirm, setConfirm] = useState('');
+  // Restore an in-progress signup when returning from /verify-email (Back).
+  const [restored] = useState(() => takePendingSignup());
+
+  const [username, setUsername] = useState(restored.username || '');
+  const [email, setEmail] = useState(() => restored.email || (orgEmail ? orgEmail : ''));
+  const [password, setPassword] = useState(restored.password || '');
+  const [confirm, setConfirm] = useState(restored.confirm || '');
   const [fieldErrors, setFieldErrors] = useState({});
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
 
   const validate = () => {
     const errors = {};
+    const trimmedUsername = username.trim();
+    if (!trimmedUsername) errors.username = 'Username is required.';
     const trimmedEmail = email.trim();
     if (!trimmedEmail) errors.email = 'Email is required.';
     else if (!EMAIL_RE.test(trimmedEmail)) errors.email = 'Enter a valid email address.';
@@ -85,7 +91,7 @@ function RegisterInner() {
       const res = await fetch(REGISTER_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), password }),
+        body: JSON.stringify({ username: username.trim(), email: email.trim(), password }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -93,34 +99,12 @@ function RegisterInner() {
         return;
       }
 
-      // Auto-login: establish the NextAuth session with the same mechanism as
-      // /login so the new account can continue directly into /onboarding.
-      const result = await signIn('credentials', {
-        redirect: false,
-        email: email.trim(),
-        password,
-      });
-      if (!result?.ok) {
-        setError({
-          message:
-            result?.error || 'Account created, but automatic sign-in failed. Please sign in.',
-        });
-        return;
-      }
-
-      // Store the bearer token used by components bypassing NextAuth.
-      const sessionRes = await fetch('/api/auth/session');
-      const sessionData = await sessionRes.json().catch(() => ({}));
-      if (sessionData?.accessToken) {
-        try {
-          localStorage.setItem('pulseops_token', sessionData.accessToken);
-        } catch (storageErr) {
-          // storage unavailable — proceed; onboarding is gated by the session.
-        }
-      }
-
-      // Continue straight to onboarding (no email-verification step).
-      router.replace('/onboarding');
+      // The account is created UNVERIFIED — route to the OTP verification step.
+      // The user must verify their email before they can sign in and onboard.
+      // Save the form values in a transient in-memory store so a "Back" from
+      // /verify-email restores them (e.g. if the email was mistyped).
+      setPendingSignup({ username, email, password, confirm });
+      router.replace(`/verify-email?email=${encodeURIComponent(email.trim())}`);
     } catch (err) {
       setError({ message: 'Could not reach the authentication server. Please try again.' });
     } finally {
@@ -155,6 +139,27 @@ function RegisterInner() {
                 <Banner kind="error">{error.message}</Banner>
               </div>
             )}
+
+              <div className="mb-4">
+                <div className="relative">
+                  <input
+                    id="register-username"
+                    type="text"
+                    name="username"
+                    autoComplete="username"
+                    value={username}
+                    placeholder=" "
+                    onChange={(e) => setUsername(e.target.value)}
+                    className={`${FLOAT_INPUT} border-slate-300 focus:border-indigo-400 focus:ring-indigo-200`}
+                  />
+                  <label htmlFor="register-username" className={FLOAT_LABEL}>
+                    Username
+                  </label>
+                </div>
+                {fieldErrors.username && (
+                  <p className="mt-1.5 text-xs text-rose-600">{fieldErrors.username}</p>
+                )}
+              </div>
 
               <div className="mb-4">
                 <div className="relative">

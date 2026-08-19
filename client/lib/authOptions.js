@@ -16,9 +16,16 @@ export const authOptions = {
         email: { label: 'Email', type: 'email' },
         password: { label: 'Password', type: 'password' },
         inviteToken: { label: 'Invite token', type: 'text' },
+        // Used by the email-OTP flow: a freshly-minted verification JWT let the
+        // just-verified user start an authenticated session without re-entering the
+        // password. Not the plaintext password and never exposed in URLs.
+        verifiedToken: { label: 'Verified session token', type: 'text' },
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) return null;
+        if (!credentials?.email) return null;
+        const hasPassword = !!credentials?.password;
+        const hasVerifiedToken = !!credentials?.verifiedToken;
+        if (!hasPassword && !hasVerifiedToken) return null;
 
         let res;
         try {
@@ -27,7 +34,10 @@ export const authOptions = {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               email: credentials.email,
-              password: credentials.password,
+              ...(credentials.password ? { password: credentials.password } : {}),
+              ...(credentials.verifiedToken
+                ? { verifiedToken: credentials.verifiedToken }
+                : {}),
               ...(credentials.inviteToken
                 ? { inviteToken: credentials.inviteToken }
                 : {}),

@@ -4,6 +4,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
 const User = require('../models/User');
+const PendingRegistration = require('../models/PendingRegistration');
 const Organization = require('../models/Organization');
 const OrganizationMember = require('../models/OrganizationMember');
 const Invitation = require('../models/Invitation');
@@ -27,6 +28,31 @@ router.transporter = transporter;
 const sha256 = (value) => crypto.createHash('sha256').update(value).digest('hex');
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const OTP_RE = /^\d{6}$/;
+const OTP_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+// Generates a secure 6-digit OTP. Only its SHA-256 hash is ever persisted.
+const generateOtp = () => crypto.randomInt(100000, 1000000).toString();
+
+/**
+ * Sends the email-verification OTP email. Follows the invite-email HTML style
+ * from orgRoutes. Email failure is non-fatal for the API response (dev flow).
+ */
+const sendOtpEmail = async (email, otp) => {
+  await transporter.sendMail({
+    to: email,
+    subject: 'Your PulseOps verification code',
+    html: `
+      <div style="font-family:sans-serif;max-width:480px;margin:auto">
+        <h2 style="color:#4f46e5">Verify your PulseOps email</h2>
+        <p>Welcome to PulseOps! Use the 6-digit code below to verify your email address. It expires in 10 minutes.</p>
+        <div style="background:#f1f5f9;border-radius:8px;padding:12px 20px;font-size:24px;font-family:monospace;letter-spacing:6px;font-weight:bold">${otp}</div>
+        <p style="margin-top:16px;font-size:12px;color:#6b7280">If you didn't create a PulseOps account, you can safely ignore this email.</p>
+      </div>`,
+    text: `Welcome to PulseOps! Your email verification code is: ${otp}. It expires in 10 minutes.`,
+  });
+};
 
 const resolveRole = async (user) => {
   if (!user.activeOrganizationId) return null;
@@ -133,12 +159,18 @@ const applyInvitation = async (user, inviteToken) => {
 
 // ---------------------------------------------------------------------------
 // POST /api/auth/register
+// Email/password signup. Does NOT create a real User yet — the account is held
+// as a PendingRegistration with only the bcrypt passwordHash + a 6-digit OTP's
+// SHA-256 hash (~10 min expiry). Plaintext password/OTP are never persisted,
+// returned, or logged. The real User is created (verified) only on successful
+// OTP verification; the client routes to /verify-email.
 // ---------------------------------------------------------------------------
 router.post('/register', authRateLimiter, async (req, res) => {
   try {
     const email = String(req.body.email || '').toLowerCase().trim();
     const password = typeof req.body.password === 'string' ? req.body.password : '';
     const name = typeof req.body.name === 'string' ? req.body.name.trim() : '';
+    const username = typeof req.body.username === 'string' ? req.body.username.trim() : '';
 
     if (!email || !EMAIL_RE.test(email)) {
       return res.status(400).json({ message: 'A valid email is required.' });
@@ -146,10 +178,20 @@ router.post('/register', authRateLimiter, async (req, res) => {
     if (!password || password.length < 8) {
       return res.status(400).json({ message: 'Password must be at least 8 characters.' });
     }
+    if (!username) {
+      return res.status(400).json({ message: 'Username is required.' });
+    }
+    if (username.length > 50) {
+      return res.status(400).json({ message: 'Username must be at most 50 characters.' });
+    }
 
     const existing = await User.findOne({ email });
     if (existing) {
       return res.status(409).json({ message: 'User already exists' });
+    }
+    const usernameExists = await User.findOne({ username });
+    if (usernameExists) {
+      return res.status(409).json({ message: 'Username is already taken.' });
     }
 
     // TASK-112: pending-invitation lookup — if an owner already invited this
@@ -164,26 +206,49 @@ router.post('/register', authRateLimiter, async (req, res) => {
 
     const passwordHash = await bcrypt.hash(password, 12);
 
-    const user = await User.create({
-      name,
-      email,
-      passwordHash,
-      isVerified: true,
-      authProvider: 'credentials',
-    });
+    // Store the signup as pending verification (upsert per email). Issuing a
+    // new OTP here also makes any previously sent code for this email invalid.
+    const otp = generateOtp();
+    const otpHash = sha256(otp);
+    const otpExpires = new Date(Date.now() + OTP_TTL_MS);
+
+    await PendingRegistration.findOneAndUpdate(
+      { email },
+      {
+        $set: {
+          name,
+          username,
+          passwordHash,
+          verificationTokenHash: otpHash,
+          verificationTokenExpires: otpExpires,
+        },
+      },
+      { upsert: true, new: true }
+    );
+
+    try {
+      await sendOtpEmail(email, otp);
+    } catch (mailErr) {
+      // Email failure must not block the API response in dev (matches /invite).
+      console.error('[register] Email send failed:', mailErr.message);
+    }
 
     return res.status(201).json(
       pendingInvite
         ? {
-            message: 'Account registered. You have a pending organization invitation waiting.',
+            message: 'Account registered. A verification code was sent — please verify your email.',
             hasPendingInvite: true,
           }
         : {
-            message: 'Registration successful.',
+            message: 'Registration successful. A verification code was sent — please verify your email.',
             hasPendingInvite: false,
           }
     );
   } catch (error) {
+    // Username uniqueness race — the sparse unique index is the final guard.
+    if (error && error.code === 11000) {
+      return res.status(409).json({ message: 'Username is already taken.' });
+    }
     console.error('Register error:', error.message);
     return res.status(500).json({ message: 'Internal server error' });
   }
@@ -222,33 +287,182 @@ router.get('/verify-email', authRateLimiter, async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// POST /api/auth/verify-email — OTP verification
+// Body: { email, otp }. On a correct, unexpired OTP the PendingRegistration is
+// converted into the real (verified) User exactly once; the pending record is
+// then removed. Wrong/expired codes leave the pending record intact for retry.
+// The client then continues with the normal login flow.
+// ---------------------------------------------------------------------------
+router.post('/verify-email', authRateLimiter, async (req, res) => {
+  try {
+    const email = String(req.body.email || '').toLowerCase().trim();
+    const otp = typeof req.body.otp === 'string' ? req.body.otp.trim() : '';
+
+    if (!email || !EMAIL_RE.test(email)) {
+      return res.status(400).json({ message: 'A valid email is required.' });
+    }
+    if (!OTP_RE.test(otp)) {
+      return res.status(400).json({ message: 'Verification code must be 6 digits.' });
+    }
+
+    const otpHash = sha256(otp);
+    const pending = await PendingRegistration.findOne({
+      email,
+      verificationTokenHash: otpHash,
+      verificationTokenExpires: { $gt: new Date() },
+    });
+
+    if (!pending) {
+      return res.status(400).json({ message: 'Invalid or expired verification code.' });
+    }
+
+    // Guard: a real account may exist already (e.g. created via OAuth in the
+    // meantime). If so, nothing to verify — drop the pending record.
+    if (await User.findOne({ email })) {
+      await PendingRegistration.deleteOne({ _id: pending._id });
+      return res.status(409).json({ message: 'User already exists. Please sign in.' });
+    }
+
+    // Correct OTP — create the real User now, verified, preserving the signup
+    // data while leaving the plaintext password/OTP never stored or exposed.
+    const user = await User.create({
+      name: pending.name || '',
+      username: pending.username,
+      email: pending.email,
+      passwordHash: pending.passwordHash,
+      isVerified: true,
+      authProvider: 'credentials',
+    });
+
+    await PendingRegistration.deleteOne({ _id: pending._id });
+
+    // Mint the standard auth JWT now, so the client can establish the existing
+    // NextAuth session without re-entering the password. Same token/response
+    // shape as /login; never includes the plaintext password.
+    const role = await resolveRole(user);
+    const token = signAuthToken(user, role);
+
+    return res.status(200).json({
+      message: 'Email verified successfully. You can now sign in.',
+      token,
+      user: {
+        id: user._id.toString(),
+        email: user.email,
+        name: user.name,
+        username: user.username,
+        activeOrganizationId: user.activeOrganizationId
+          ? user.activeOrganizationId.toString()
+          : null,
+        role,
+        hasWorkspace: false,
+        workspaceCount: 0,
+        workspaces: [],
+      },
+    });
+  } catch (error) {
+    // Duplicate-key race (email/username already taken by a just-created User).
+    if (error && error.code === 11000) {
+      await PendingRegistration.deleteOne({
+        email: String(req.body.email || '').toLowerCase().trim(),
+      }).catch(() => {});
+      const field = error.keyValue && error.keyValue.username ? 'Username' : 'Email';
+      return res
+        .status(409)
+        .json({
+          message: field === 'Username' ? 'Username is already taken.' : 'User already exists. Please sign in.',
+        });
+    }
+    console.error('Verify email error:', error.message);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/auth/resend-otp
+// Body: { email }. Regenerates the pending registration's OTP (10 min expiry),
+// invalidating any previously sent code, and emails it again.
+// ---------------------------------------------------------------------------
+router.post('/resend-otp', authRateLimiter, async (req, res) => {
+  try {
+    const email = String(req.body.email || '').toLowerCase().trim();
+
+    if (!email || !EMAIL_RE.test(email)) {
+      return res.status(400).json({ message: 'A valid email is required.' });
+    }
+
+    const pending = await PendingRegistration.findOne({ email });
+    if (!pending) {
+      return res.status(404).json({ message: 'No pending verification found for this email.' });
+    }
+
+    const otp = generateOtp();
+    pending.verificationTokenHash = sha256(otp);
+    pending.verificationTokenExpires = new Date(Date.now() + OTP_TTL_MS);
+    await pending.save();
+
+    try {
+      await sendOtpEmail(email, otp);
+    } catch (mailErr) {
+      console.error('[resend-otp] Email send failed:', mailErr.message);
+    }
+
+    return res.status(200).json({
+      message: 'A new verification code has been sent to your email.',
+    });
+  } catch (error) {
+    console.error('Resend OTP error:', error.message);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // POST /api/auth/login
 // ---------------------------------------------------------------------------
 router.post('/login', authRateLimiter, async (req, res) => {
   try {
     const email = String(req.body.email || '').toLowerCase().trim();
     const password = typeof req.body.password === 'string' ? req.body.password : '';
+    const verifiedToken =
+      typeof req.body.verifiedToken === 'string' ? req.body.verifiedToken.trim() : '';
 
-    if (!email || !password) {
-      return res.status(400).json({ message: 'Email and password are required.' });
-    }
+    let user = null;
 
-    const user = await User.findOne({ email });
-    if (!user || !user.passwordHash) {
-      return res.status(401).json({ message: 'Invalid credentials' });
-    }
+    if (verifiedToken) {
+      // Email-OTP verification grant: a valid JWT minted by the verify-email
+      // flow proves this already-isVerified user without re-entering the
+      // password. Reuses the same token + login response shape as usual.
+      try {
+        const decoded = jwt.verify(verifiedToken, process.env.JWT_SECRET);
+        const candidate = await User.findById(decoded.userId);
+        if (candidate && candidate.isVerified) user = candidate;
+      } catch (err) {
+        // invalid/expired token — treated as no match below
+      }
+      if (!user) {
+        return res.status(401).json({ message: 'Invalid credentials' });
+      }
+    } else {
+      if (!email || !password) {
+        return res.status(400).json({ message: 'Email and password are required.' });
+      }
 
-    const valid = await bcrypt.compare(password, user.passwordHash);
-    if (!valid) {
-      return res.status(401).json({ message: 'Invalid credentials' });
-    }
+      user = await User.findOne({ email });
+      if (!user || !user.passwordHash) {
+        return res.status(401).json({ message: 'Invalid credentials' });
+      }
 
-    // Hard check: unverified accounts cannot log in.
-    if (user.isVerified === false) {
-      return res.status(403).json({
-        message: 'Email not verified. Please check your inbox.',
-        code: 'EMAIL_NOT_VERIFIED',
-      });
+      const valid = await bcrypt.compare(password, user.passwordHash);
+      if (!valid) {
+        return res.status(401).json({ message: 'Invalid credentials' });
+      }
+
+      // Hard check: unverified accounts cannot log in.
+      if (user.isVerified === false) {
+        return res.status(403).json({
+          message: 'Email not verified. Please check your inbox.',
+          code: 'EMAIL_NOT_VERIFIED',
+        });
+      }
     }
 
     // Invitation interceptor: attach workspace membership if inviteToken present.
