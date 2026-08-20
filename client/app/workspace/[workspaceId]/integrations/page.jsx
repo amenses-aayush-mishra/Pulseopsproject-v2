@@ -2,13 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
-import { Loader2, Check, Copy } from 'lucide-react';
+import { Loader2, Check, Copy, Search } from 'lucide-react';
 
 const API_BASE = process.env.NEXT_PUBLIC_EXPRESS_API_URL || 'http://localhost:5000';
 
 // ─── Mini UI components ─────────────────────────────────────────────────────
 
-function IntegrationCard({ icon, title, description, badge, action }) {
+function IntegrationCard({ icon, title, description, badge, topActions, action }) {
   return (
     <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
       <div className="p-6 sm:p-8">
@@ -22,7 +22,10 @@ function IntegrationCard({ icon, title, description, badge, action }) {
               <p className="text-sm text-slate-500 mt-0.5">{description}</p>
             </div>
           </div>
-          <div className="shrink-0">{badge}</div>
+          <div className="shrink-0 flex flex-col items-end gap-2">
+            {badge}
+            {topActions}
+          </div>
         </div>
         {action && <div className="mt-6 border-t border-slate-100 pt-6">{action}</div>}
       </div>
@@ -35,6 +38,21 @@ function ConnectedBadge() {
     <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-sm font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
       <Check className="h-3 w-3" /> Connected
     </span>
+  );
+}
+
+// The existing Disable button, relocated to the top of the integration cards.
+function DisableButton({ onClick, disabled, loading }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="inline-flex items-center gap-2 rounded-lg border border-rose-300 bg-white px-4 py-2 text-sm font-medium text-rose-600 transition-colors hover:bg-rose-50 disabled:opacity-60"
+    >
+      {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+      Disable
+    </button>
   );
 }
 
@@ -78,9 +96,11 @@ function GitHubPanel({ workspaceId, token }) {
   const [loadingRepos, setLoadingRepos] = useState(false);
   const [selectedRepos, setSelectedRepos] = useState([]);
   const [syncing, setSyncing] = useState(false);
-  const [syncSuccess, setSyncSuccess] = useState(false);
+  const [syncSuccess, setSyncSuccess] = useState(null); // string message when present
   const [isConnected, setIsConnected] = useState(false);
   const [connectError, setConnectError] = useState('');
+  const [disabling, setDisabling] = useState(false);
+  const [search, setSearch] = useState('');
 
   const loadStatus = async () => {
     try {
@@ -144,6 +164,9 @@ function GitHubPanel({ workspaceId, token }) {
         const redirectUri = encodeURIComponent('http://localhost:5000/api/integrations/github/callback');
         const urlObj = new URL(data.url);
         urlObj.searchParams.set('redirect_uri', decodeURIComponent(redirectUri));
+        // Force GitHub to show the authorization/account-selection page instead
+        // of silently connecting the browser's currently signed-in account.
+        urlObj.searchParams.set('prompt', 'select_account');
         window.location.href = urlObj.toString();
       } else {
         setConnectError(data.error || 'Could not initiate GitHub connection.');
@@ -155,11 +178,36 @@ function GitHubPanel({ workspaceId, token }) {
     }
   };
 
+  const handleDisable = async () => {
+    setDisabling(true);
+    setConnectError('');
+    try {
+      const res = await fetch(`${API_BASE}/api/integrations/github/disable`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'x-organization-id': workspaceId },
+      });
+      if (res.ok) {
+        setIsConnected(false);
+        setRepos([]);
+        setSelectedRepos([]);
+        setSyncSuccess(null);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setConnectError(data?.error || 'Could not disable GitHub.');
+      }
+    } catch {
+      setConnectError('Could not reach the server.');
+    } finally {
+      setDisabling(false);
+    }
+  };
+
   const toggleRepo = (id) =>
     setSelectedRepos((prev) => (prev.includes(id) ? prev.filter((r) => r !== id) : [...prev, id]));
 
   const handleSync = async () => {
     if (selectedRepos.length === 0) return;
+    const importedIds = [...selectedRepos];
     setSyncing(true);
     try {
       const res = await fetch(`${API_BASE}/api/integrations/track-repositories`, {
@@ -169,9 +217,18 @@ function GitHubPanel({ workspaceId, token }) {
           'x-organization-id': workspaceId,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ repositoryIds: selectedRepos }),
+        body: JSON.stringify({ repositoryIds: importedIds }),
       });
-      if (res.ok) setSyncSuccess(true);
+      if (res.ok) {
+        // Hide only the just-imported repositories from the selection list so
+        // they don't get imported again. They remain on the Repositories page.
+        setRepos((prev) => prev.filter((repo) => !importedIds.includes(repo.id)));
+        setSelectedRepos([]);
+        const noun = importedIds.length === 1 ? 'repository' : 'repositories';
+        setSyncSuccess(
+          `Synced ${importedIds.length} ${noun} successfully.`
+        );
+      }
     } catch {
       /* swallow */
     } finally {
@@ -179,12 +236,22 @@ function GitHubPanel({ workspaceId, token }) {
     }
   };
 
+  const filteredRepos = repos.filter((repo) =>
+    (repo.full_name || repo.name || '')
+      .toLowerCase()
+      .includes(search.trim().toLowerCase())
+  );
+
   return (
     <IntegrationCard
       icon={<GitHubIcon />}
       title="GitHub"
       description="Sync repositories and track pull requests automatically."
-      badge={isConnected ? <ConnectedBadge /> : undefined}
+      topActions={
+        isConnected ? (
+          <DisableButton onClick={handleDisable} disabled={disabling} loading={disabling} />
+        ) : undefined
+      }
       action={
         !isConnected ? (
           <div className="space-y-3">
@@ -216,17 +283,29 @@ function GitHubPanel({ workspaceId, token }) {
               <div className="flex justify-center py-8">
                 <Loader2 className="h-8 w-8 animate-spin text-slate-300" />
               </div>
-            ) : syncSuccess ? (
-              <div className="rounded-lg bg-emerald-50 border border-emerald-100 p-4 text-sm font-medium text-emerald-800">
-                ✓ Synced {selectedRepos.length} {selectedRepos.length === 1 ? 'repository' : 'repositories'} successfully.
-              </div>
             ) : (
-              <div className="space-y-3">
-                <div className="rounded-lg border border-slate-200 divide-y divide-slate-100 overflow-hidden">
-                  {repos.length === 0 && (
+              <>
+                {syncSuccess && (
+                  <div className="rounded-lg bg-emerald-50 border border-emerald-100 p-4 text-sm font-medium text-emerald-800">
+                    ✓ {syncSuccess}
+                  </div>
+                )}
+                <div className="space-y-3">
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+                  <input
+                    type="text"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Search repositories..."
+                    className="w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 py-2 text-sm text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200"
+                  />
+                </div>
+                <div className="rounded-lg border border-slate-200 divide-y divide-slate-100 overflow-hidden max-h-48 overflow-y-auto">
+                  {filteredRepos.length === 0 && (
                     <p className="p-4 text-sm text-slate-400">No repositories found.</p>
                   )}
-                  {repos.map((repo) => (
+                  {filteredRepos.map((repo) => (
                     <label
                       key={repo.id}
                       className="flex cursor-pointer items-center gap-4 px-4 py-3 hover:bg-slate-50 transition-colors"
@@ -251,7 +330,7 @@ function GitHubPanel({ workspaceId, token }) {
                     </label>
                   ))}
                 </div>
-                <div className="flex justify-end">
+                <div className="flex items-center justify-end">
                   <button
                     onClick={handleSync}
                     disabled={selectedRepos.length === 0 || syncing}
@@ -262,6 +341,7 @@ function GitHubPanel({ workspaceId, token }) {
                   </button>
                 </div>
               </div>
+              </>
             )}
           </div>
         )
@@ -288,6 +368,8 @@ function SlackPanel({ workspaceId, token }) {
   const [connectError, setConnectError] = useState('');
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState(null); // { ok: boolean, message: string }
+  const [disabling, setDisabling] = useState(false);
+  const [disableError, setDisableError] = useState(null); // string when present
    console.log('[SlackPanel] RENDER', {
   workspaceId,
   hasToken: Boolean(token),
@@ -379,6 +461,31 @@ function SlackPanel({ workspaceId, token }) {
       setTesting(false);
     }
   };
+  const handleDisable = async () => {
+    setDisabling(true);
+    setDisableError(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/integrations/slack/disable`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'x-organization-id': workspaceId },
+      });
+      if (res.ok) {
+        setIsConnected(false);
+        setTeamName('');
+        setChannelName('');
+        setTestResult(null);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setDisableError(data?.error || 'Could not disable Slack.');
+      }
+    } catch {
+      setDisableError('Could not reach the server.');
+    } finally {
+      setDisabling(false);
+    }
+  };
+
+
  
   return (
     <IntegrationCard
@@ -386,6 +493,14 @@ function SlackPanel({ workspaceId, token }) {
       title="Slack"
       description="Connect a Slack channel to receive PulseOps notifications."
       badge={isConnected ? <ConnectedBadge /> : undefined}
+      topActions={
+        isConnected ? (
+          <div className="flex flex-col items-end gap-2">
+            {disableError && <p className="text-xs text-rose-600">{disableError}</p>}
+            <DisableButton onClick={handleDisable} disabled={disabling} loading={disabling} />
+          </div>
+        ) : undefined
+      }
       action={
         statusLoading ? (
           <div className="flex justify-center py-6">
@@ -447,15 +562,41 @@ function SlackPanel({ workspaceId, token }) {
  
 // ─── Jira Integration Panel ───────────────────────────────────────────────────
 
-function JiraPanel({ workspaceId }) {
+function JiraPanel({ workspaceId, token }) {
   const webhookUrl = `${API_BASE}/api/webhooks/jira`;
   const [copied, setCopied] = useState(false);
+  const [disabling, setDisabling] = useState(false);
+  const [disableMsg, setDisableMsg] = useState(null); // { ok: boolean, message: string }
 
   const copy = () => {
     navigator.clipboard.writeText(webhookUrl).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });
+  };
+
+  const handleDisable = async () => {
+    setDisabling(true);
+    setDisableMsg(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/integrations/jira/disable`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'x-organization-id': workspaceId },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setDisableMsg({
+          ok: true,
+          message: data?.message || 'Jira integration disabled.',
+        });
+      } else {
+        setDisableMsg({ ok: false, message: data?.error || 'Could not disable Jira.' });
+      }
+    } catch {
+      setDisableMsg({ ok: false, message: 'Could not reach the server.' });
+    } finally {
+      setDisabling(false);
+    }
   };
 
   return (
@@ -467,6 +608,27 @@ function JiraPanel({ workspaceId }) {
         <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">
           Webhook
         </span>
+      }
+      topActions={
+        <div className="flex flex-col items-end gap-2">
+          {disableMsg && (
+            <div
+              role={disableMsg.ok ? 'status' : 'alert'}
+              className={`rounded-lg border px-3 py-2 text-sm font-medium ${
+                disableMsg.ok
+                  ? 'border-emerald-100 bg-emerald-50 text-emerald-800'
+                  : 'border-rose-200 bg-rose-50 text-rose-700'
+              }`}
+            >
+              {disableMsg.message}
+            </div>
+          )}
+          <DisableButton
+            onClick={handleDisable}
+            disabled={disabling || !token}
+            loading={disabling}
+          />
+        </div>
       }
       action={
         <div className="space-y-3">
@@ -514,7 +676,7 @@ export default function IntegrationsPage({ params }) {
 
       <GitHubPanel workspaceId={workspaceId} token={token} />
       <SlackPanel workspaceId={workspaceId} token={token}/>
-      <JiraPanel workspaceId={workspaceId} />
+      <JiraPanel workspaceId={workspaceId} token={token} />
     </div>
   );
 }

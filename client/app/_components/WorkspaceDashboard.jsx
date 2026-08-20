@@ -281,7 +281,7 @@ export default function WorkspaceDashboard() {
                 <span aria-hidden="true">⇄</span> Switch workspace
               </button>
               {showSwitcher && (
-                <div className="absolute right-0 z-10 mt-2 w-64 rounded-xl border border-white/60 bg-white/90 p-1.5 shadow-xl shadow-indigo-100/60 backdrop-blur-xl">
+                <div className="absolute right-0 z-50 mt-2 w-64 max-h-40 overflow-y-auto rounded-xl border border-white/60 bg-white/90 p-1.5 shadow-xl shadow-indigo-100/60 backdrop-blur-xl">
                   {organizations.map((org) => {
                     const selected = org.id === activeOrganizationId;
                     return (

@@ -514,6 +514,44 @@ router.post(
   }
 );
  
+// ---------------------------------------------------------------------------
+// POST /api/integrations/:provider/disable
+// Shared generic deactivation for GitHub / Slack / Jira. Reuses the existing
+// Integration.status field — flipping an active integration to `revoked` makes
+// its matching /status endpoint return connected:false, so the connected UI
+// turns off. This does NOT add or alter any OAuth wiring.
+// ---------------------------------------------------------------------------
+router.post(
+  '/:provider/disable',
+  authenticate,
+  verifyTenantAccess,
+  requirePermission('manage_integrations'),
+  async (req, res) => {
+    const provider = req.params.provider;
+    if (!['github', 'slack', 'jira'].includes(provider)) {
+      return res.status(400).json({ message: 'Provider not supported.' });
+    }
+    try {
+      const integration = await Integration.findOne({
+        organizationId: req.organizationId,
+        provider,
+        status: 'active',
+      });
+      if (!integration) {
+        return res.status(200).json({
+          disabled: false,
+          message: 'No active connection to disable.',
+        });
+      }
+      integration.status = 'revoked';
+      await integration.save();
+      return res.status(200).json({ disabled: true, provider });
+    } catch (err) {
+      console.error(`[${provider}/disable] error:`, err.message);
+      return res.status(500).json({ error: 'Internal server error.' });
+    }
+  }
+);
  
 // ---------------------------------------------------------------------------
 // POST /api/webhooks/github  (also served via /api/integrations/github via server.js)
