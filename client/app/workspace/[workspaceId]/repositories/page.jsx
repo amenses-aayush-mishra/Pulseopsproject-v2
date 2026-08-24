@@ -20,7 +20,7 @@ function GitHubIcon() {
 
 // ─── Repository card ─────────────────────────────────────────────────────────
 
-function RepositoryCard({ repo, workspaceId }) {
+function RepositoryCard({ repo, workspaceId, onRemove }) {
   const router = useRouter();
   const importedDate = repo.createdAt
     ? new Date(repo.createdAt).toLocaleDateString(undefined, {
@@ -64,15 +64,29 @@ function RepositoryCard({ repo, workspaceId }) {
               </p>
             </div>
           </div>
-          <span
-            className={`shrink-0 inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${
-              repo.private
-                ? 'bg-rose-50 text-rose-700 ring-rose-600/20'
-                : 'bg-emerald-50 text-emerald-700 ring-emerald-600/20'
-            }`}
-          >
-            {repo.private ? 'Private' : 'Public'}
-          </span>
+          <div className="flex items-center gap-2">
+            <span
+              className={`shrink-0 inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${
+                repo.private
+                  ? 'bg-rose-50 text-rose-700 ring-rose-600/20'
+                  : 'bg-emerald-50 text-emerald-700 ring-emerald-600/20'
+              }`}
+            >
+              {repo.private ? 'Private' : 'Public'}
+            </span>
+            {onRemove && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRemove(repo);
+                }}
+                className="shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-white px-3 py-1.5 text-xs font-medium text-rose-600 transition-colors hover:bg-rose-50 hover:text-rose-700"
+              >
+                Remove
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="mt-5 grid gap-3 border-t border-slate-100 pt-5 sm:grid-cols-2">
@@ -123,6 +137,29 @@ export default function RepositoriesPage({ params }) {
   const [repositories, setRepositories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [removing, setRemoving] = useState(null); // repo _id currently being removed
+
+  const removeRepository = async (repo) => {
+    if (!repo?._id || removing) return;
+    setRemoving(repo._id);
+    try {
+      const res = await fetch(`${API_BASE}/api/repositories/${repo._id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}`, 'x-organization-id': workspaceId },
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.message || data?.error || `Failed to remove repository (${res.status}).`);
+      }
+      // Remove from the displayed list immediately; the GitHub repo itself is
+      // untouched and becomes selectable again on the Integrations page.
+      setRepositories((prev) => prev.filter((r) => r._id !== repo._id));
+    } catch (err) {
+      setError(err.message || 'Could not remove repository.');
+    } finally {
+      setRemoving(null);
+    }
+  };
 
   const loadRepositories = async () => {
     setLoading(true);
@@ -196,7 +233,12 @@ export default function RepositoriesPage({ params }) {
       ) : (
         <div className="space-y-4">
           {repositories.map((repo) => (
-            <RepositoryCard key={repo._id || repo.name} repo={repo} workspaceId={workspaceId} />
+            <RepositoryCard
+              key={repo._id || repo.name}
+              repo={repo}
+              workspaceId={workspaceId}
+              onRemove={removeRepository}
+            />
           ))}
         </div>
       )}

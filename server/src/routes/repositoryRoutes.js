@@ -351,4 +351,41 @@ router.get(
   }
 );
 
+// ---------------------------------------------------------------------------
+// DELETE /api/repositories/:repositoryId
+// Removes an imported repository from this workspace. The GitHub repository is
+// NOT deleted (no remote mutation) and the GitHub integration stays connected.
+// Removing the Repository doc makes it selectable again on the Integrations
+// page, because /api/integrations/github/repositories returns the raw GitHub
+// repo list for this org.
+// ---------------------------------------------------------------------------
+router.delete(
+  '/:repositoryId',
+  authenticate,
+  verifyTenantAccess,
+  requirePermission('manage_repositories'),
+  async (req, res) => {
+    try {
+      const { repositoryId } = req.params;
+      if (!mongoose.Types.ObjectId.isValid(repositoryId)) {
+        return res.status(404).json({ message: 'Repository not found.' });
+      }
+
+      const removed = await Repository.findOneAndDelete({
+        _id: repositoryId,
+        organizationId: req.organizationId,
+      });
+
+      if (!removed) {
+        return res.status(404).json({ message: 'Repository not found.' });
+      }
+
+      return res.status(200).json({ removed: true, repositoryId });
+    } catch (err) {
+      console.error('[repositories/delete] error:', err.message);
+      return res.status(500).json({ message: 'Internal server error' });
+    }
+  }
+);
+
 module.exports = router;

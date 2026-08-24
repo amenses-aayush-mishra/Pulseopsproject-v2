@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { signOut, useSession } from 'next-auth/react';
+import { Check } from 'lucide-react';
 
 // Backend API base — mirror of /login and /onboarding.
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
@@ -268,7 +269,7 @@ export default function WorkspaceDashboard() {
                 <span aria-hidden="true">＋</span> Invite teammate
               </button>
             )}
-            <div className="relative">
+            <div className="relative z-50">
               <button
                 type="button"
                 onClick={() => {
@@ -281,7 +282,7 @@ export default function WorkspaceDashboard() {
                 <span aria-hidden="true">⇄</span> Switch workspace
               </button>
               {showSwitcher && (
-                <div className="absolute right-0 z-50 mt-2 w-64 max-h-40 overflow-y-auto rounded-xl border border-white/60 bg-white/90 p-1.5 shadow-xl shadow-indigo-100/60 backdrop-blur-xl">
+                <div className="absolute right-0 z-50 mt-2 w-64 max-h-40 overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
                   {organizations.map((org) => {
                     const selected = org.id === activeOrganizationId;
                     return (
@@ -290,15 +291,24 @@ export default function WorkspaceDashboard() {
                         type="button"
                         disabled={switching}
                         onClick={() => onSwitchWorkspace(org.id, org.role)}
-                        className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition ${
+                        className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm transition ${
                           selected
-                            ? 'bg-indigo-50 text-indigo-800'
+                            ? 'bg-indigo-50 font-medium text-indigo-800'
                             : 'text-slate-600 hover:bg-slate-100'
                         }`}
                       >
-                        <span className="truncate">{org.name}</span>
+                        <span className="flex min-w-0 items-center gap-2">
+                          {selected ? (
+                            <Check className="h-4 w-4 shrink-0 text-indigo-600" aria-hidden="true" />
+                          ) : (
+                            <span className="w-4 shrink-0" aria-hidden="true" />
+                          )}
+                          <span className="truncate">{org.name}</span>
+                        </span>
                         {selected ? (
-                          <span className="text-xs font-semibold text-indigo-600">Active</span>
+                          <span className="shrink-0 text-xs font-semibold text-indigo-600">
+                            Active
+                          </span>
                         ) : null}
                       </button>
                     );

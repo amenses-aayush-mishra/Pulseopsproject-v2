@@ -115,6 +115,7 @@ export default function WorkspaceSidebar({ workspaceId, role }) {
 
   const items = [
     { href: base, label: 'Overview', matchExact: true },
+    { href: `${base}/workspaces`, label: 'Workspaces' },
     { href: `${base}/integrations`, label: 'Integrations' },
     { href: `${base}/invitation`, label: 'Invitation & Password' },
   ];
