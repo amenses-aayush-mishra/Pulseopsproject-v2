@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { signOut } from 'next-auth/react';
 import { useTheme } from '../theme/ThemeProvider';
+import SlackSidebarSection from './SlackSidebarSection';
 
 /**
  * TASK-107 — workspace shell sidebar. Rendered by the /workspace/[workspaceId]
@@ -18,6 +19,10 @@ export default function WorkspaceSidebar({ workspaceId, role }) {
 
   const items = [
     { href: base, label: 'Overview', matchExact: true },
+    { href: `${base}/developers`, label: 'Developers' },
+    { href: `${base}/analytics`, label: 'Analytics' },
+    { href: `${base}/reports`, label: 'Reports' },
+    { href: `${base}/tickets`, label: 'Tickets' },
     { href: `${base}/integrations`, label: 'Integrations' },
     { href: `${base}/invitation`, label: 'Invitation & Password' },
   ];
@@ -92,6 +97,8 @@ export default function WorkspaceSidebar({ workspaceId, role }) {
             </div>
           </div>
         )}
+
+        <SlackSidebarSection workspaceId={workspaceId} />
       </nav>
 
       <div className="border-t border-white/10 p-3">

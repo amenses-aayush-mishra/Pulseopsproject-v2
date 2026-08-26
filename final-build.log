@@ -1,0 +1,89 @@
+
+> pulseops-client@1.0.0 build
+> node node_modules/next/dist/bin/next build
+
+  ▲ Next.js 14.2.15
+  - Environments: .env.local
+
+   Creating an optimized production build ...
+<w> [webpack.cache.PackFileCacheStrategy/webpack.FileSystemInfo] Managed item C:\Users\amenses-innovation\Desktop\pulseops_V2\Pulseopsproject-v2\client\node_modules\@next\swc-linux-x64-musl isn't a directory or doesn't contain a package.json (see snapshot.managedPaths option)
+<w> [webpack.cache.PackFileCacheStrategy/webpack.FileSystemInfo] Managed item C:\Users\amenses-innovation\Desktop\pulseops_V2\Pulseopsproject-v2\client\node_modules\@next\swc-win32-arm64-msvc isn't a directory or doesn't contain a package.json (see snapshot.managedPaths option)
+<w> [webpack.cache.PackFileCacheStrategy/webpack.FileSystemInfo] Managed item C:\Users\amenses-innovation\Desktop\pulseops_V2\Pulseopsproject-v2\client\node_modules\@next\swc-linux-x64-gnu isn't a directory or doesn't contain a package.json (see snapshot.managedPaths option)
+<w> [webpack.cache.PackFileCacheStrategy/webpack.FileSystemInfo] Managed item C:\Users\amenses-innovation\Desktop\pulseops_V2\Pulseopsproject-v2\client\node_modules\@next\swc-linux-arm64-musl isn't a directory or doesn't contain a package.json (see snapshot.managedPaths option)
+<w> [webpack.cache.PackFileCacheStrategy/webpack.FileSystemInfo] Managed item C:\Users\amenses-innovation\Desktop\pulseops_V2\Pulseopsproject-v2\client\node_modules\@next\swc-win32-ia32-msvc isn't a directory or doesn't contain a package.json (see snapshot.managedPaths option)
+<w> [webpack.cache.PackFileCacheStrategy/webpack.FileSystemInfo] Managed item C:\Users\amenses-innovation\Desktop\pulseops_V2\Pulseopsproject-v2\client\node_modules\@next\swc-linux-arm64-gnu isn't a directory or doesn't contain a package.json (see snapshot.managedPaths option)
+<w> [webpack.cache.PackFileCacheStrategy/webpack.FileSystemInfo] Managed item C:\Users\amenses-innovation\Desktop\pulseops_V2\Pulseopsproject-v2\client\node_modules\@next\swc-darwin-x64 isn't a directory or doesn't contain a package.json (see snapshot.managedPaths option)
+<w> [webpack.cache.PackFileCacheStrategy/webpack.FileSystemInfo] Managed item C:\Users\amenses-innovation\Desktop\pulseops_V2\Pulseopsproject-v2\client\node_modules\@next\swc-darwin-arm64 isn't a directory or doesn't contain a package.json (see snapshot.managedPaths option)
+<w> [webpack.cache.PackFileCacheStrategy/webpack.FileSystemInfo] Managed item C:\Users\amenses-innovation\Desktop\pulseops_V2\Pulseopsproject-v2\client\node_modules\@next\swc-win32-ia32-msvc isn't a directory or doesn't contain a package.json (see snapshot.managedPaths option)
+<w> [webpack.cache.PackFileCacheStrategy/webpack.FileSystemInfo] Managed item C:\Users\amenses-innovation\Desktop\pulseops_V2\Pulseopsproject-v2\client\node_modules\@next\swc-win32-arm64-msvc isn't a directory or doesn't contain a package.json (see snapshot.managedPaths option)
+<w> [webpack.cache.PackFileCacheStrategy/webpack.FileSystemInfo] Managed item C:\Users\amenses-innovation\Desktop\pulseops_V2\Pulseopsproject-v2\client\node_modules\@next\swc-linux-x64-gnu isn't a directory or doesn't contain a package.json (see snapshot.managedPaths option)
+<w> [webpack.cache.PackFileCacheStrategy/webpack.FileSystemInfo] Managed item C:\Users\amenses-innovation\Desktop\pulseops_V2\Pulseopsproject-v2\client\node_modules\@next\swc-linux-x64-musl isn't a directory or doesn't contain a package.json (see snapshot.managedPaths option)
+<w> [webpack.cache.PackFileCacheStrategy/webpack.FileSystemInfo] Managed item C:\Users\amenses-innovation\Desktop\pulseops_V2\Pulseopsproject-v2\client\node_modules\@next\swc-linux-arm64-gnu isn't a directory or doesn't contain a package.json (see snapshot.managedPaths option)
+<w> [webpack.cache.PackFileCacheStrategy/webpack.FileSystemInfo] Managed item C:\Users\amenses-innovation\Desktop\pulseops_V2\Pulseopsproject-v2\client\node_modules\@next\swc-darwin-x64 isn't a directory or doesn't contain a package.json (see snapshot.managedPaths option)
+<w> [webpack.cache.PackFileCacheStrategy/webpack.FileSystemInfo] Managed item C:\Users\amenses-innovation\Desktop\pulseops_V2\Pulseopsproject-v2\client\node_modules\@next\swc-darwin-arm64 isn't a directory or doesn't contain a package.json (see snapshot.managedPaths option)
+<w> [webpack.cache.PackFileCacheStrategy/webpack.FileSystemInfo] Managed item C:\Users\amenses-innovation\Desktop\pulseops_V2\Pulseopsproject-v2\client\node_modules\@next\swc-linux-arm64-musl isn't a directory or doesn't contain a package.json (see snapshot.managedPaths option)
+ ✓ Compiled successfully
+   Linting and checking validity of types ...
+
+./app/workspace/[workspaceId]/channels/[conversationId]/components/AttachmentCard.jsx
+96:13  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+./app/workspace/[workspaceId]/channels/[conversationId]/components/Lightbox.jsx
+37:7  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+./app/workspace/[workspaceId]/channels/[conversationId]/components/MessageItem.jsx
+99:9  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+./app/workspace/[workspaceId]/integrations/page.jsx
+112:6  Warning: React Hook useEffect has missing dependencies: 'loadRepos' and 'loadStatus'. Either include them or remove the dependency array.  react-hooks/exhaustive-deps
+
+./app/workspace/[workspaceId]/repositories/[repositoryId]/components/GitHubPanel.jsx
+41:7  Warning: Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+info  - Need to disable some ESLint rules? Learn more here: https://nextjs.org/docs/basic-features/eslint#disabling-rules
+   Collecting page data ...
+   Generating static pages (0/13) ...
+   Generating static pages (3/13) 
+   Generating static pages (6/13) 
+   Generating static pages (9/13) 
+ ✓ Generating static pages (13/13)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                                               Size     First Load JS
+┌ ○ /                                                     158 B          87.3 kB
+├ ○ /_not-found                                           873 B          88.1 kB
+├ ƒ /api/auth/[...nextauth]                               0 B                0 B
+├ ○ /dashboard                                            586 B          97.4 kB
+├ ○ /forgot-password                                      1.96 kB        89.2 kB
+├ ƒ /login                                                4.11 kB         101 kB
+├ ○ /onboarding                                           2.95 kB        99.8 kB
+├ ƒ /register                                             2.62 kB        89.8 kB
+├ ○ /reset-password                                       2.83 kB          90 kB
+├ ○ /select-workspace                                     2.84 kB        99.7 kB
+├ ƒ /verify-email                                         2.7 kB         99.6 kB
+├ ○ /workspace                                            479 B          97.3 kB
+├ ƒ /workspace/[workspaceId]                              4.79 kB         114 kB
+├ ƒ /workspace/[workspaceId]/analytics                    1.68 kB         107 kB
+├ ƒ /workspace/[workspaceId]/channels/[conversationId]    6.58 kB         111 kB
+├ ƒ /workspace/[workspaceId]/developers                   1.8 kB          107 kB
+├ ƒ /workspace/[workspaceId]/integrations                 6.76 kB         104 kB
+├ ƒ /workspace/[workspaceId]/invitation                   1.97 kB        98.8 kB
+├ ƒ /workspace/[workspaceId]/invitations                  2.43 kB        99.3 kB
+├ ƒ /workspace/[workspaceId]/reports                      2 kB            112 kB
+├ ƒ /workspace/[workspaceId]/repositories                 3.42 kB         108 kB
+├ ƒ /workspace/[workspaceId]/repositories/[repositoryId]  7.39 kB         112 kB
+├ ƒ /workspace/[workspaceId]/settings                     1.65 kB        88.8 kB
+├ ƒ /workspace/[workspaceId]/settings/theme               656 B          97.5 kB
+└ ƒ /workspace/[workspaceId]/tickets                      1.21 kB         111 kB
++ First Load JS shared by all                             87.2 kB
+  ├ chunks/117-1e66f9061de188fe.js                        31.6 kB
+  ├ chunks/fd9d1056-8d3e45696ad69592.js                   53.6 kB
+  └ other shared chunks (total)                           1.96 kB
+
+
+ƒ Middleware                                              48.8 kB
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

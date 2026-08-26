@@ -11,14 +11,36 @@ const integrationSchema = new Schema({
   state: { type: String },
   accessToken: { type: String },
   refreshToken: { type: String },
+  // Slack bot token (xoxb-...) used for Slack Web API calls when the
+  // integration is running in Events API mode (mirroring/pipeline). Kept
+  // separate from `accessToken`, which stores the Incoming Webhook URL.
+  botToken: { type: String, default: null },
+  slackTeamId: { type: String, default: null },
   slackChannelId: { type: String, default: null },
   slackChannelName: { type: String, default: null },
   slackTeamName: { type: String, default: null },
+  // Bot user id (U…) returned by auth.test — used for self-echo suppression.
+  botUserId: { type: String, default: null },
+  // Scopes actually granted on the token. Never assumed; recorded from the
+  // OAuth response and/or the token introspection. Drives the "Permissions
+  // need updating → Reconnect Slack" UX when the required scope set grows.
+  grantedScopes: { type: [String], default: [] },
+  requiredScopes: { type: [String], default: [] },
+  // Actionable integration-level error (missing_scope, invalid_auth, ...) that
+  // surfaces in the integrations UI instead of a silent failure.
+  authError: { type: String, default: null },
+  lastAuthTestAt: { type: Date, default: null },
   metadata: { type: Schema.Types.Mixed, default: {} },
   // TASK-108 — webhook activity trail (updated by POST /api/integrations/:provider/webhook).
   lastWebhookEvent: { type: String, default: null },
   lastWebhookAt: { type: Date, default: null },
   lastWebhookId: { type: String, default: null },
+  // Jira-specific fields
+  jiraSiteUrl: { type: String },
+  jiraCloudId: { type: String },
+  tokenExpiresAt: { type: Date },
+  jiraWebhookId: { type: String },
+  lastSyncAt: { type: Date },
 }, { timestamps: true });
 
 integrationSchema.index({ organizationId: 1, provider: 1 }, { unique: true });

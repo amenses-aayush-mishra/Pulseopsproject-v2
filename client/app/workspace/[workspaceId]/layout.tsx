@@ -48,6 +48,18 @@ export default async function WorkspaceLayout({ children, params }) {
               Tasks
             </Link>
             
+            <Link href={`/workspace/${workspaceId}/analytics`} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-indigo-600 transition-colors">
+              Analytics
+            </Link>
+                        <Link href={`/workspace/${workspaceId}/channels`} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-indigo-600 transition-colors">
+              Channels
+            </Link>
+                        <Link href={`/workspace/${workspaceId}/developers`} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-indigo-600 transition-colors">
+              Developers
+            </Link>
+                        <Link href={`/workspace/${workspaceId}/reports`} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-indigo-600 transition-colors">
+              Reports
+            </Link>
             <div className="mt-8 mb-4 px-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Administration</div>
             
             {isAdmin && (

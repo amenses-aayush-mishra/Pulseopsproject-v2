@@ -75,4 +75,4 @@ function buildTestMessagePayload() {
   };
 }
 
-module.exports = { slackWebhookRequest,buildTestMessagePayload };
+module.exports = { slackWebhookRequest, buildTestMessagePayload,  };

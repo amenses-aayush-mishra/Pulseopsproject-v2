@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { signOut, useSession } from 'next-auth/react';
+import AISummaryPanel from './AISummaryPanel';
+import AnalyticsCards from './AnalyticsCards';
 
 // Backend API base — mirror of /login and /onboarding.
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
@@ -325,8 +327,12 @@ export default function WorkspaceDashboard() {
           </div>
         )}
 
-        {/* TASK-113 — workspace overview metric widgets */}
+        {/* TICKET-8 — AI Engineering Health Summary Panel */}
+          <AISummaryPanel organizationId={activeOrganizationId} />
         <main className="mt-8">
+          {/* Live analytics widgets — health score, KPI trends, team health, risks */}
+          <AnalyticsCards organizationId={activeOrganizationId} />
+
           <div className="mb-6 grid gap-4 sm:grid-cols-3">
             <div className="rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm shadow-indigo-100/50 backdrop-blur-xl">
               <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
