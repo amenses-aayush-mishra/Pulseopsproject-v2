@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
+
 import { signOut, useSession } from 'next-auth/react';
 import Link from 'next/link';
 import {
@@ -396,8 +396,8 @@ export default function WorkspaceDashboard() {
                         disabled={switching}
                         onClick={() => onSwitchWorkspace(org.id, org.role)}
                         className={`w-full flex items-center justify-between px-3 py-1.5 text-xs text-left transition-colors ${selected
-                            ? 'bg-indigo-50 font-bold text-indigo-700'
-                            : 'text-slate-700 hover:bg-slate-50 font-medium'
+                          ? 'bg-indigo-50 font-bold text-indigo-700'
+                          : 'text-slate-700 hover:bg-slate-50 font-medium'
                           }`}
                       >
                         <span className="truncate">{org.name}</span>
