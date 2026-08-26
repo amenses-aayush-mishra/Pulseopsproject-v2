@@ -6,7 +6,7 @@ import { Loader2, Check, Copy, Search } from 'lucide-react';
 
 const API_BASE = process.env.NEXT_PUBLIC_EXPRESS_API_URL || 'http://localhost:5000';
 
-// ─── Mini UI components ─────────────────────────────────────────────────────
+// --- Mini UI components ---
 
 function IntegrationCard({ icon, title, description, badge, topActions, action }) {
   return (
@@ -41,7 +41,6 @@ function ConnectedBadge() {
   );
 }
 
-// The existing Disable button, relocated to the top of the integration cards.
 function DisableButton({ onClick, disabled, loading }) {
   return (
     <button
@@ -56,7 +55,7 @@ function DisableButton({ onClick, disabled, loading }) {
   );
 }
 
-// ─── GitHub icon ─────────────────────────────────────────────────────────────
+// --- GitHub icon ---
 
 function GitHubIcon() {
   return (
@@ -66,7 +65,7 @@ function GitHubIcon() {
   );
 }
 
-// ─── Slack icon ───────────────────────────────────────────────────────────────
+// --- Slack icon ---
 
 function SlackIcon() {
   return (
@@ -76,7 +75,7 @@ function SlackIcon() {
   );
 }
 
-// ─── Jira icon ────────────────────────────────────────────────────────────────
+// --- Jira icon ---
 
 function JiraIcon() {
   return (
@@ -88,7 +87,7 @@ function JiraIcon() {
   );
 }
 
-// ─── GitHub Integration Panel ─────────────────────────────────────────────────
+// --- GitHub Integration Panel ---
 
 function GitHubPanel({ workspaceId, token }) {
   const [connecting, setConnecting] = useState(false);
@@ -96,7 +95,7 @@ function GitHubPanel({ workspaceId, token }) {
   const [loadingRepos, setLoadingRepos] = useState(false);
   const [selectedRepos, setSelectedRepos] = useState([]);
   const [syncing, setSyncing] = useState(false);
-  const [syncSuccess, setSyncSuccess] = useState(null); // string message when present
+  const [syncSuccess, setSyncSuccess] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
   const [connectError, setConnectError] = useState('');
   const [disabling, setDisabling] = useState(false);
@@ -164,8 +163,6 @@ function GitHubPanel({ workspaceId, token }) {
         const redirectUri = encodeURIComponent('http://localhost:5000/api/integrations/github/callback');
         const urlObj = new URL(data.url);
         urlObj.searchParams.set('redirect_uri', decodeURIComponent(redirectUri));
-        // Force GitHub to show the authorization/account-selection page instead
-        // of silently connecting the browser's currently signed-in account.
         urlObj.searchParams.set('prompt', 'select_account');
         window.location.href = urlObj.toString();
       } else {
@@ -220,14 +217,10 @@ function GitHubPanel({ workspaceId, token }) {
         body: JSON.stringify({ repositoryIds: importedIds }),
       });
       if (res.ok) {
-        // Hide only the just-imported repositories from the selection list so
-        // they don't get imported again. They remain on the Repositories page.
         setRepos((prev) => prev.filter((repo) => !importedIds.includes(repo.id)));
         setSelectedRepos([]);
         const noun = importedIds.length === 1 ? 'repository' : 'repositories';
-        setSyncSuccess(
-          `Synced ${importedIds.length} ${noun} successfully.`
-        );
+        setSyncSuccess(`Synced ${importedIds.length} ${noun} successfully.`);
       }
     } catch {
       /* swallow */
@@ -350,15 +343,9 @@ function GitHubPanel({ workspaceId, token }) {
   );
 }
 
-// ─── Slack Integration Panel ──────────────────────────────────────────────────
+// --- Slack Integration Panel ---
+// Phase 3: OAuth connect + status + test message + conversation sync + disable
 
-// ─── Slack Integration Panel ──────────────────────────────────────────────────
-//
-// Phase 3: OAuth connect + status + test message. `token` here is strictly
-// the existing PulseOps application bearer token (identical to what
-// GitHubPanel receives) — the backend never returns any Slack credential
-// (webhook URL, decrypted or otherwise) in any response this panel reads.
- 
 function SlackPanel({ workspaceId, token }) {
   const [statusLoading, setStatusLoading] = useState(true);
   const [isConnected, setIsConnected] = useState(false);
@@ -367,18 +354,10 @@ function SlackPanel({ workspaceId, token }) {
   const [connecting, setConnecting] = useState(false);
   const [connectError, setConnectError] = useState('');
   const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState(null); // { ok: boolean, message: string }
-<<<<<<< HEAD
+  const [testResult, setTestResult] = useState(null);
   const [disabling, setDisabling] = useState(false);
-  const [disableError, setDisableError] = useState(null); // string when present
-   console.log('[SlackPanel] RENDER', {
-  workspaceId,
-  hasToken: Boolean(token),
-  statusLoading,
-  isConnected,
-});
-=======
-  const [status, setStatus] = useState(null); // full status payload (scopes, counts, errors)
+  const [disableError, setDisableError] = useState(null);
+  const [status, setStatus] = useState(null);
   const [conversations, setConversations] = useState([]);
   const [convLoading, setConvLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -386,7 +365,6 @@ function SlackPanel({ workspaceId, token }) {
   const [syncResult, setSyncResult] = useState(null);
 
   const headers = { Authorization: `Bearer ${token}`, 'x-organization-id': workspaceId };
->>>>>>> feature/ai-summary-jira-backup
 
   const loadStatus = async () => {
     if (!token) return;
@@ -401,7 +379,7 @@ function SlackPanel({ workspaceId, token }) {
         setStatus(data);
       }
     } catch {
-      // Ignore network errors for status check, mirrors GitHubPanel's loadStatus
+      // Ignore network errors for status check
     } finally {
       setStatusLoading(false);
     }
@@ -444,7 +422,6 @@ function SlackPanel({ workspaceId, token }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
-  // When connected (or after a sync round-trip) load the conversation list.
   useEffect(() => {
     if (isConnected && token) {
       loadConversations();
@@ -470,6 +447,32 @@ function SlackPanel({ workspaceId, token }) {
     }
   };
 
+  const handleDisable = async () => {
+    setDisabling(true);
+    setDisableError(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/integrations/slack/disable`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'x-organization-id': workspaceId },
+      });
+      if (res.ok) {
+        setIsConnected(false);
+        setTeamName('');
+        setChannelName('');
+        setTestResult(null);
+        setConversations([]);
+        setStatus(null);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setDisableError(data?.error || 'Could not disable Slack.');
+      }
+    } catch {
+      setDisableError('Could not reach the server.');
+    } finally {
+      setDisabling(false);
+    }
+  };
+
   const handleSync = async () => {
     setSyncing(true);
     setSyncResult(null);
@@ -484,7 +487,6 @@ function SlackPanel({ workspaceId, token }) {
         setSyncResult({ ok: false, message: data.error || 'Sync could not be started.' });
         return;
       }
-      // Poll until no conversation is left in SYNCING (or a few attempts pass).
       let latest = null;
       for (let i = 0; i < 15; i += 1) {
         await new Promise((r) => setTimeout(r, 2500));
@@ -534,7 +536,6 @@ function SlackPanel({ workspaceId, token }) {
         setSyncResult({ ok: false, message: data.error || 'Retry could not be started.' });
         return;
       }
-      // Poll until this specific conversation leaves SYNCING.
       for (let i = 0; i < 15; i += 1) {
         await new Promise((r) => setTimeout(r, 2500));
         const convData = await loadConversations();
@@ -570,34 +571,6 @@ function SlackPanel({ workspaceId, token }) {
       setTesting(false);
     }
   };
-<<<<<<< HEAD
-  const handleDisable = async () => {
-    setDisabling(true);
-    setDisableError(null);
-    try {
-      const res = await fetch(`${API_BASE}/api/integrations/slack/disable`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'x-organization-id': workspaceId },
-      });
-      if (res.ok) {
-        setIsConnected(false);
-        setTeamName('');
-        setChannelName('');
-        setTestResult(null);
-      } else {
-        const data = await res.json().catch(() => ({}));
-        setDisableError(data?.error || 'Could not disable Slack.');
-      }
-    } catch {
-      setDisableError('Could not reach the server.');
-    } finally {
-      setDisabling(false);
-    }
-  };
-
-
- 
-=======
 
   const badge = isConnected
     ? status && status.scopesHealthy === false ? (
@@ -638,14 +611,12 @@ function SlackPanel({ workspaceId, token }) {
     return <span className="text-xs text-slate-400">Not synced</span>;
   };
 
->>>>>>> feature/ai-summary-jira-backup
   return (
     <IntegrationCard
       icon={<SlackIcon />}
       title="Slack"
-<<<<<<< HEAD
-      description="Connect a Slack channel to receive PulseOps notifications."
-      badge={isConnected ? <ConnectedBadge /> : undefined}
+      description="Mirror Slack conversations into PulseOps and keep them synchronized in real time."
+      badge={badge}
       topActions={
         isConnected ? (
           <div className="flex flex-col items-end gap-2">
@@ -654,10 +625,6 @@ function SlackPanel({ workspaceId, token }) {
           </div>
         ) : undefined
       }
-=======
-      description="Mirror Slack conversations into PulseOps and keep them synchronized in real time."
-      badge={badge}
->>>>>>> feature/ai-summary-jira-backup
       action={
         statusLoading ? (
           <div className="flex justify-center py-6">
@@ -806,16 +773,10 @@ function SlackPanel({ workspaceId, token }) {
     />
   );
 }
- 
-// ─── Jira Integration Panel ───────────────────────────────────────────────────
+
+// --- Jira Integration Panel ---
 
 function JiraPanel({ workspaceId, token }) {
-<<<<<<< HEAD
-  const webhookUrl = `${API_BASE}/api/webhooks/jira`;
-  const [copied, setCopied] = useState(false);
-  const [disabling, setDisabling] = useState(false);
-  const [disableMsg, setDisableMsg] = useState(null); // { ok: boolean, message: string }
-=======
   const [statusLoading, setStatusLoading] = useState(true);
   const [isConnected, setIsConnected] = useState(false);
   const [siteUrl, setSiteUrl] = useState('');
@@ -824,31 +785,29 @@ function JiraPanel({ workspaceId, token }) {
   const [webhookRegistered, setWebhookRegistered] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [connectError, setConnectError] = useState('');
-  
+  const [disabling, setDisabling] = useState(false);
+  const [disableMsg, setDisableMsg] = useState(null);
+
   // Projects
   const [projects, setProjects] = useState([]);
   const [projectsLoading, setProjectsLoading] = useState(false);
   const [selectedProjectKey, setSelectedProjectKey] = useState('');
   const [projectsError, setProjectsError] = useState('');
-  
+
   // Sync
   const [syncing, setSyncing] = useState(false);
-  const [syncResult, setSyncResult] = useState(null); // { ok: boolean, message: string, synced: number }
-  
+  const [syncResult, setSyncResult] = useState(null);
+
   // Webhook
   const [webhookRegistering, setWebhookRegistering] = useState(false);
   const [webhookResult, setWebhookResult] = useState(null);
   const [webhookVerified, setWebhookVerified] = useState(false);
-  
+
   // Issues preview
   const [issues, setIssues] = useState([]);
   const [issuesLoading, setIssuesLoading] = useState(false);
->>>>>>> feature/ai-summary-jira-backup
 
   const headers = { Authorization: `Bearer ${token}`, 'x-organization-id': workspaceId };
-  // Public webhook URL. Backend-provided (status/register-webhook) value is
-  // authoritative. Fall back to a configured PUBLIC backend URL — never
-  // localhost — because Jira Cloud cannot deliver to localhost.
   const [webhookUrl, setWebhookUrl] = useState(
     process.env.NEXT_PUBLIC_BACKEND_URL
       ? `${process.env.NEXT_PUBLIC_BACKEND_URL.replace(/\/$/, '')}/api/webhooks/jira`
@@ -967,6 +926,34 @@ function JiraPanel({ workspaceId, token }) {
     }
   };
 
+  const handleDisable = async () => {
+    setDisabling(true);
+    setDisableMsg(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/integrations/jira/disable`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'x-organization-id': workspaceId },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setDisableMsg({
+          ok: true,
+          message: data?.message || 'Jira integration disabled.',
+        });
+        setIsConnected(false);
+        setProjects([]);
+        setSelectedProjectKey('');
+        setIssues([]);
+      } else {
+        setDisableMsg({ ok: false, message: data?.error || 'Could not disable Jira.' });
+      }
+    } catch {
+      setDisableMsg({ ok: false, message: 'Could not reach the server.' });
+    } finally {
+      setDisabling(false);
+    }
+  };
+
   const handleSync = async () => {
     if (!selectedProjectKey) return;
     setSyncing(true);
@@ -980,7 +967,7 @@ function JiraPanel({ workspaceId, token }) {
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.success) {
         setSyncResult({ ok: true, message: `Synced ${data.synced} issues from ${data.projectKey}.`, synced: data.synced });
-        loadStatus(); // Refresh lastSyncAt
+        loadStatus();
         loadIssues(selectedProjectKey);
       } else {
         setSyncResult({ ok: false, message: data.error || 'Sync failed.' });
@@ -1007,7 +994,7 @@ function JiraPanel({ workspaceId, token }) {
         setWebhookResult({ ok: true, message: data.message || 'Webhook registered successfully.', webhookId: data.webhookId });
         setWebhookVerified(data.verified === true);
         if (data.webhookUrl) setWebhookUrl(data.webhookUrl);
-        loadStatus(); // Refresh webhook status
+        loadStatus();
       } else {
         setWebhookResult({ ok: false, message: data.error || 'Webhook registration failed.' });
       }
@@ -1019,68 +1006,9 @@ function JiraPanel({ workspaceId, token }) {
   };
 
   const copyWebhookUrl = () => {
-    navigator.clipboard.writeText(webhookUrl).then(() => {
-      // Could add toast notification here
-    });
+    navigator.clipboard.writeText(webhookUrl).then(() => {});
   };
 
-<<<<<<< HEAD
-  const handleDisable = async () => {
-    setDisabling(true);
-    setDisableMsg(null);
-    try {
-      const res = await fetch(`${API_BASE}/api/integrations/jira/disable`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'x-organization-id': workspaceId },
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) {
-        setDisableMsg({
-          ok: true,
-          message: data?.message || 'Jira integration disabled.',
-        });
-      } else {
-        setDisableMsg({ ok: false, message: data?.error || 'Could not disable Jira.' });
-      }
-    } catch {
-      setDisableMsg({ ok: false, message: 'Could not reach the server.' });
-    } finally {
-      setDisabling(false);
-    }
-  };
-
-  return (
-    <IntegrationCard
-      icon={<JiraIcon />}
-      title="Jira"
-      description="Track issues and receive updates when Jira issues are created or updated."
-      badge={
-        <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">
-          Webhook
-        </span>
-      }
-      topActions={
-        <div className="flex flex-col items-end gap-2">
-          {disableMsg && (
-            <div
-              role={disableMsg.ok ? 'status' : 'alert'}
-              className={`rounded-lg border px-3 py-2 text-sm font-medium ${
-                disableMsg.ok
-                  ? 'border-emerald-100 bg-emerald-50 text-emerald-800'
-                  : 'border-rose-200 bg-rose-50 text-rose-700'
-              }`}
-            >
-              {disableMsg.message}
-            </div>
-          )}
-          <DisableButton
-            onClick={handleDisable}
-            disabled={disabling || !token}
-            loading={disabling}
-          />
-        </div>
-      }
-=======
   const formatDate = (dateStr) => {
     if (!dateStr) return '—';
     try {
@@ -1104,7 +1032,29 @@ function JiraPanel({ workspaceId, token }) {
       title="Jira Cloud"
       description="Sync Jira issues, track project progress, and receive real-time updates via webhooks."
       badge={badge}
->>>>>>> feature/ai-summary-jira-backup
+      topActions={
+        isConnected ? (
+          <div className="flex flex-col items-end gap-2">
+            {disableMsg && (
+              <div
+                role={disableMsg.ok ? 'status' : 'alert'}
+                className={`rounded-lg border px-3 py-2 text-sm font-medium ${
+                  disableMsg.ok
+                    ? 'border-emerald-100 bg-emerald-50 text-emerald-800'
+                    : 'border-rose-200 bg-rose-50 text-rose-700'
+                }`}
+              >
+                {disableMsg.message}
+              </div>
+            )}
+            <DisableButton
+              onClick={handleDisable}
+              disabled={disabling || !token}
+              loading={disabling}
+            />
+          </div>
+        ) : undefined
+      }
       action={
         <div className="space-y-6">
           {/* Connection Status / Connect Button */}
@@ -1322,7 +1272,7 @@ function JiraPanel({ workspaceId, token }) {
   );
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
+// --- Page ---
 
 export default function IntegrationsPage({ params }) {
   const { workspaceId } = params;

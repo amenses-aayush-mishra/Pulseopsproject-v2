@@ -432,8 +432,6 @@ router.post('/slack-events', (req, res) => {
   router.handle(req, res, () => {});
 });
 
-module.exports = router;
-
 // slack part
 // ---------------------------------------------------------------------------
 // GET /api/integrations/slack/authorize
@@ -632,45 +630,26 @@ router.post(
       if (!delivered) {
         return res.status(502).json({ error: 'Slack rejected the test message. Please reconnect Slack.' });
       }
-<<<<<<< HEAD
 
       return res.status(200).json({ success: true, message: 'Test message sent to Slack.' });
-=======
- 
-return res.status(200).json({ success: true, message: 'Test message sent to Slack.' });
->>>>>>> feature/ai-summary-jira-backup
     } catch (err) {
       console.error('[slack/test] error:', err.message);
       return res.status(500).json({ error: 'Internal server error.' });
     }
   }
 );
-<<<<<<< HEAD
- 
+
+// ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
 // POST /api/integrations/:provider/disable
-// Shared generic deactivation for GitHub / Slack / Jira. Reuses the existing
-// Integration.status field — flipping an active integration to `revoked` makes
-// its matching /status endpoint return connected:false, so the connected UI
-// turns off. This does NOT add or alter any OAuth wiring.
+// Shared generic deactivation for GitHub / Slack / Jira.
 // ---------------------------------------------------------------------------
 router.post(
   '/:provider/disable',
-=======
-
-
-// ---------------------------------------------------------------------------
-// GET /api/integrations/jira/auth
-// Returns a Jira OAuth URL for the requesting organisation.
-// ---------------------------------------------------------------------------
-router.get(
-  '/jira/auth',
->>>>>>> feature/ai-summary-jira-backup
   authenticate,
   verifyTenantAccess,
   requirePermission('manage_integrations'),
   async (req, res) => {
-<<<<<<< HEAD
     const provider = req.params.provider;
     if (!['github', 'slack', 'jira'].includes(provider)) {
       return res.status(400).json({ message: 'Provider not supported.' });
@@ -692,7 +671,21 @@ router.get(
       return res.status(200).json({ disabled: true, provider });
     } catch (err) {
       console.error(`[${provider}/disable] error:`, err.message);
-=======
+      return res.status(500).json({ error: 'Internal server error.' });
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// GET /api/integrations/jira/auth
+// Returns a Jira OAuth URL for the requesting organisation.
+// ---------------------------------------------------------------------------
+router.get(
+  '/jira/auth',
+  authenticate,
+  verifyTenantAccess,
+  requirePermission('manage_integrations'),
+  async (req, res) => {
     const clientId = process.env.JIRA_CLIENT_ID;
     if (!clientId) {
       return res.status(503).json({ error: 'Jira OAuth is not configured on this server.' });
@@ -966,14 +959,10 @@ router.get(
       return res.status(200).json({ connected: false });
     } catch (err) {
       console.error('[jira/status] error:', err.message);
->>>>>>> feature/ai-summary-jira-backup
       return res.status(500).json({ error: 'Internal server error.' });
     }
   }
 );
-<<<<<<< HEAD
- 
-=======
 
 // ---------------------------------------------------------------------------
 // GET /api/integrations/jira/projects
@@ -1385,7 +1374,8 @@ router.post(
 );
 
 
->>>>>>> feature/ai-summary-jira-backup
+
+
 // ---------------------------------------------------------------------------
 // POST /api/webhooks/github  (also served via /api/integrations/github via server.js)
 // Receives GitHub push and pull_request events.
