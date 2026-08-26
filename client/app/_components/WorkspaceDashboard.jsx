@@ -2,15 +2,32 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { signOut, useSession } from 'next-auth/react';
-import { Check, FolderKanban, ListTodo, FileText, BarChart, Users, Puzzle, ChevronRight } from 'lucide-react';
+import Link from 'next/link';
+import {
+  GitBranch,
+  MessageSquare,
+  Shield,
+  Layers,
+  Check,
+  Plus,
+  ArrowRight,
+  ChevronRight,
+  LogOut,
+  Activity,
+  Zap,
+  Lock,
+  User,
+  Settings,
+  SlidersHorizontal,
+} from 'lucide-react';
 
-// Backend API base — mirror of /login and /onboarding.
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+const API_BASE = process.env.NEXT_PUBLIC_EXPRESS_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 const ME_ENDPOINT = `${API_BASE}/api/auth/me`;
 const SWITCH_ENDPOINT = `${API_BASE}/api/organizations/switch-org`;
 const INVITE_ENDPOINT = `${API_BASE}/api/organizations/invite`;
+const REPOS_ENDPOINT = `${API_BASE}/api/organizations/repositories`;
+const SLACK_CHANNELS_ENDPOINT = `${API_BASE}/api/slack/channels`;
 
-// TASK-113 — invitation role options (mirrors the backend ALLOWED_ROLES).
 const INVITE_ROLES = [
   { value: 'developer', label: 'Developer' },
   { value: 'maintainer', label: 'Maintainer' },
@@ -18,22 +35,23 @@ const INVITE_ROLES = [
   { value: 'viewer', label: 'Viewer' },
 ];
 
-const GRID_BG = {
-  backgroundImage:
-    'linear-gradient(to right, rgba(99,102,241,0.07) 1px, transparent 1px), linear-gradient(to bottom, rgba(99,102,241,0.07) 1px, transparent 1px)',
-  backgroundSize: '44px 44px',
-};
-
 export default function WorkspaceDashboard() {
   const { data: session, status, update } = useSession();
   const router = useRouter();
 
   const [me, setMe] = useState(null);
   const [meError, setMeError] = useState(null);
+  const [repositories, setRepositories] = useState([]);
+  const [reposLoading, setReposLoading] = useState(true);
+  const [slackChannels, setSlackChannels] = useState([]);
+  const [slackLoading, setSlackLoading] = useState(true);
+
   const [switching, setSwitching] = useState(false);
   const [showSwitcher, setShowSwitcher] = useState(false);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [switchError, setSwitchError] = useState(null);
-  // TASK-113 — invite teammate modal
+
+  // Invite modal state
   const [showInvite, setShowInvite] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState('developer');
@@ -43,8 +61,10 @@ export default function WorkspaceDashboard() {
 
   const activeOrganizationId = session?.user?.activeOrganizationId || null;
   const role = session?.user?.role || null;
+  const userEmail = session?.user?.email || '—';
+  const userName = session?.user?.name || userEmail.split('@')[0];
 
-  // Pull the org list from the backend (/api/auth/me) using the Express JWT.
+  // Load user profile & organizations
   useEffect(() => {
     let cancelled = false;
     const storedToken = typeof window !== 'undefined' ? localStorage.getItem('pulseops_token') : null;
@@ -63,7 +83,7 @@ export default function WorkspaceDashboard() {
         } else {
           setMeError(data?.message || `Could not load workspace context (${res.status}).`);
         }
-      } catch (err) {
+      } catch {
         if (!cancelled) setMeError('Could not reach the workspace service.');
       }
     })();
@@ -72,6 +92,74 @@ export default function WorkspaceDashboard() {
       cancelled = true;
     };
   }, [status, session?.accessToken]);
+
+  // Load Repositories overview count
+  useEffect(() => {
+    let cancelled = false;
+    const storedToken = typeof window !== 'undefined' ? localStorage.getItem('pulseops_token') : null;
+    const bearer = session?.accessToken || storedToken;
+
+    (async () => {
+      setReposLoading(true);
+      try {
+        const res = await fetch(REPOS_ENDPOINT, {
+          headers: {
+            ...(bearer ? { Authorization: `Bearer ${bearer.trim()}` } : {}),
+          },
+        });
+        const data = await res.json().catch(() => ({}));
+        if (cancelled) return;
+        if (res.ok && Array.isArray(data)) {
+          setRepositories(data);
+        } else if (res.ok && Array.isArray(data?.repositories)) {
+          setRepositories(data.repositories);
+        } else {
+          setRepositories([]);
+        }
+      } catch {
+        if (!cancelled) setRepositories([]);
+      } finally {
+        if (!cancelled) setReposLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.accessToken, activeOrganizationId]);
+
+  // Load Slack Channels summary
+  useEffect(() => {
+    let cancelled = false;
+    const storedToken = typeof window !== 'undefined' ? localStorage.getItem('pulseops_token') : null;
+    const bearer = session?.accessToken || storedToken;
+
+    (async () => {
+      setSlackLoading(true);
+      try {
+        const res = await fetch(SLACK_CHANNELS_ENDPOINT, {
+          headers: {
+            ...(bearer ? { Authorization: `Bearer ${bearer.trim()}` } : {}),
+          },
+        });
+        const data = await res.json().catch(() => ({}));
+        if (cancelled) return;
+        if (res.ok && Array.isArray(data?.channels)) {
+          setSlackChannels(data.channels);
+        } else {
+          setSlackChannels([]);
+        }
+      } catch {
+        if (!cancelled) setSlackChannels([]);
+      } finally {
+        if (!cancelled) setSlackLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.accessToken, activeOrganizationId]);
 
   const onSwitchWorkspace = useCallback(
     async (orgId, orgRole) => {
@@ -85,9 +173,7 @@ export default function WorkspaceDashboard() {
         let storedToken = null;
         try {
           storedToken = localStorage.getItem('pulseops_token');
-        } catch (storageErr) {
-          // storage unavailable — fall back to the NextAuth accessToken below.
-        }
+        } catch { }
         const bearer = session?.accessToken || storedToken;
 
         const res = await fetch(SWITCH_ENDPOINT, {
@@ -101,10 +187,7 @@ export default function WorkspaceDashboard() {
         const data = await res.json().catch(() => ({}));
 
         if (res.status === 403) {
-          setSwitchError(
-            data?.message ||
-            'Forbidden. You are not an active member of this organization.'
-          );
+          setSwitchError(data?.message || 'Forbidden. You are not an active member of this organization.');
           return;
         }
         if (!res.ok) {
@@ -115,9 +198,7 @@ export default function WorkspaceDashboard() {
         if (data.token) {
           try {
             localStorage.setItem('pulseops_token', data.token);
-          } catch (storageErr) {
-            // storage disabled — the NextAuth session is still synced below.
-          }
+          } catch { }
         }
 
         await update({
@@ -128,7 +209,7 @@ export default function WorkspaceDashboard() {
 
         setShowSwitcher(false);
         router.refresh();
-      } catch (err) {
+      } catch {
         setSwitchError('Could not reach the workspace server. Please try again.');
       } finally {
         setSwitching(false);
@@ -141,9 +222,7 @@ export default function WorkspaceDashboard() {
     try {
       localStorage.removeItem('pulseops_token');
       sessionStorage.clear();
-    } catch (err) {
-      // storage unavailable
-    }
+    } catch { }
     await signOut({ callbackUrl: '/login' });
   };
 
@@ -162,9 +241,7 @@ export default function WorkspaceDashboard() {
       let storedToken = null;
       try {
         storedToken = localStorage.getItem('pulseops_token');
-      } catch (storageErr) {
-        // storage unavailable
-      }
+      } catch { }
       const bearer = session?.accessToken || storedToken;
       const res = await fetch(INVITE_ENDPOINT, {
         method: 'POST',
@@ -182,7 +259,7 @@ export default function WorkspaceDashboard() {
       setInviteSuccess(`Invitation sent to ${email}.`);
       setInviteEmail('');
       setTimeout(() => setShowInvite(false), 900);
-    } catch (err) {
+    } catch {
       setInviteError('Could not reach the invitation service. Please try again.');
     } finally {
       setInviteBusy(false);
@@ -191,10 +268,10 @@ export default function WorkspaceDashboard() {
 
   if (status === 'loading') {
     return (
-      <div className="relative flex min-h-screen items-center justify-center bg-slate-50">
-        <div aria-hidden="true" className="absolute inset-0" style={GRID_BG} />
-        <div className="relative rounded-xl border border-slate-200 bg-white/70 px-6 py-4 text-sm text-slate-500 shadow-sm backdrop-blur-xl">
-          Loading your workspace…
+      <div className="flex h-screen items-center justify-center bg-[#FAFAFC]">
+        <div className="flex items-center gap-3 rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm">
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-indigo-200 border-t-indigo-600" />
+          <span className="text-sm font-semibold text-slate-700">Loading workspace…</span>
         </div>
       </div>
     );
@@ -202,14 +279,13 @@ export default function WorkspaceDashboard() {
 
   if (status === 'unauthenticated') {
     return (
-      <div className="relative flex min-h-screen items-center justify-center bg-slate-50 p-6">
-        <div aria-hidden="true" className="absolute inset-0" style={GRID_BG} />
-        <div className="relative w-full max-w-md rounded-2xl border border-white/60 bg-white/70 p-8 text-center shadow-xl shadow-indigo-100/60 backdrop-blur-xl">
-          <h1 className="text-xl font-semibold text-slate-900">Not signed in</h1>
-          <p className="mt-2 text-sm text-slate-500">Please sign in to view your workspace.</p>
+      <div className="flex h-screen items-center justify-center bg-[#FAFAFC] p-6">
+        <div className="w-full max-w-md rounded-3xl border border-slate-200/80 bg-white p-8 text-center shadow-md">
+          <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Not signed in</h1>
+          <p className="mt-2 text-sm text-slate-500">Please sign in to access your PulseOps workspace.</p>
           <a
             href="/login"
-            className="mt-6 inline-flex items-center justify-center rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700"
+            className="mt-6 inline-flex w-full items-center justify-center rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-sm hover:bg-slate-800 transition-colors"
           >
             Sign in
           </a>
@@ -219,8 +295,7 @@ export default function WorkspaceDashboard() {
   }
 
   const organizations = me?.availableOrganizations || [];
-  const activeName = me?.activeOrganization?.name || 'Current workspace';
-  const email = session?.user?.email || '—';
+  const activeName = me?.activeOrganization?.name || 'Primary Workspace';
   const canInvite = role === 'owner' || role === 'admin';
   const base = activeOrganizationId ? `/workspace/${activeOrganizationId}` : '';
 
@@ -270,52 +345,48 @@ export default function WorkspaceDashboard() {
   ];
 
   return (
-    <div className="relative min-h-screen bg-slate-50 text-slate-900">
-      <div aria-hidden="true" className="absolute inset-0" style={GRID_BG} />
-      <div aria-hidden="true" className="absolute -top-32 -left-24 h-96 w-96 rounded-full bg-indigo-300/40 blur-3xl" />
-      <div aria-hidden="true" className="absolute -bottom-32 -right-24 h-96 w-96 rounded-full bg-violet-300/40 blur-3xl" />
+    <div className="h-screen bg-[#FAFAFC] text-slate-900 flex flex-col overflow-hidden selection:bg-indigo-100 selection:text-indigo-900">
 
-      <div className="relative mx-auto max-w-6xl px-6 py-8">
-        {/* Top bar */}
-        <header className="flex items-center justify-between rounded-2xl border border-white/60 bg-white/70 px-5 py-3.5 shadow-sm shadow-indigo-100/50 backdrop-blur-xl">
-          <div className="flex items-center gap-2.5">
-            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 via-purple-500 to-blue-600 text-sm font-bold text-white">
-              P
-            </span>
-            <div>
-              <p className="text-sm font-semibold leading-tight text-slate-900">PulseOps Workspace</p>
-              <p className="text-xs text-slate-500">{activeName}</p>
+      {/* ---------------- 1. TOP BAR (Height ~56px) ---------------- */}
+      <header className="h-14 px-5 sm:px-8 bg-[#FAFAFC] border-b border-slate-200/80 flex items-center justify-between shrink-0">
+
+        {/* Left: PulseOps Wordmark + Workspace Switcher */}
+        <div className="flex items-center gap-3">
+          <Link href="/" className="flex items-center gap-2 group">
+            <div className="h-7 w-7 rounded-lg bg-slate-900 flex items-center justify-center text-white shadow-sm group-hover:scale-105 transition-transform">
+              <div className="flex items-center gap-0.5">
+                <span className="w-0.5 h-3 bg-white rounded-full"></span>
+                <span className="w-0.5 h-4 bg-white rounded-full"></span>
+                <span className="w-0.5 h-3 bg-white rounded-full"></span>
+              </div>
             </div>
-          </div>
+            <span className="text-base font-bold text-slate-900 tracking-tight">PulseOps</span>
+          </Link>
 
-          <div className="flex items-center gap-2.5">
-            {canInvite && (
-              <button
-                type="button"
-                onClick={() => {
-                  setShowInvite(true);
-                  setInviteError(null);
-                  setInviteSuccess(null);
-                }}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-600 px-3.5 py-2 text-sm font-semibold text-white shadow-sm shadow-indigo-500/25 transition-opacity hover:opacity-90"
-              >
-                <span aria-hidden="true">＋</span> Invite teammate
-              </button>
-            )}
-            <div className="relative z-50">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowSwitcher((v) => !v);
-                  setSwitchError(null);
-                }}
-                disabled={switching || !organizations.length}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white/80 px-3.5 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:border-indigo-300 hover:text-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <span aria-hidden="true">⇄</span> Switch workspace
-              </button>
-              {showSwitcher && (
-                <div className="absolute right-0 z-50 mt-2 w-64 max-h-40 overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+          <span className="text-slate-300 text-xs">/</span>
+
+          {/* Workspace Switcher */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => {
+                setShowSwitcher((v) => !v);
+                setSwitchError(null);
+              }}
+              disabled={switching || !organizations.length}
+              className="flex items-center gap-2 px-2.5 py-1 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-800 hover:border-slate-300 transition-all shadow-2xs"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block"></span>
+              <span className="max-w-[150px] truncate">{activeName}</span>
+              <span className="text-[10px] text-slate-400 font-normal">▼</span>
+            </button>
+
+            {showSwitcher && (
+              <div className="absolute left-0 mt-2 w-64 rounded-xl border border-slate-200 bg-white py-1.5 shadow-xl z-50">
+                <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100">
+                  Switch Workspace
+                </div>
+                <div className="max-h-40 overflow-y-auto">
                   {organizations.map((org) => {
                     const selected = org.id === activeOrganizationId;
                     return (
@@ -324,163 +395,374 @@ export default function WorkspaceDashboard() {
                         type="button"
                         disabled={switching}
                         onClick={() => onSwitchWorkspace(org.id, org.role)}
-                        className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm transition ${selected
-                          ? 'bg-indigo-50 font-medium text-indigo-800'
-                          : 'text-slate-600 hover:bg-slate-100'
+                        className={`w-full flex items-center justify-between px-3 py-1.5 text-xs text-left transition-colors ${selected
+                            ? 'bg-indigo-50 font-bold text-indigo-700'
+                            : 'text-slate-700 hover:bg-slate-50 font-medium'
                           }`}
                       >
-                        <span className="flex min-w-0 items-center gap-2">
-                          {selected ? (
-                            <Check className="h-4 w-4 shrink-0 text-indigo-600" aria-hidden="true" />
-                          ) : (
-                            <span className="w-4 shrink-0" aria-hidden="true" />
-                          )}
-                          <span className="truncate">{org.name}</span>
-                        </span>
-                        {selected ? (
-                          <span className="shrink-0 text-xs font-semibold text-indigo-600">
-                            Active
-                          </span>
-                        ) : null}
+                        <span className="truncate">{org.name}</span>
+                        {selected && <Check className="w-3.5 h-3.5 text-indigo-600 shrink-0" />}
                       </button>
                     );
                   })}
                 </div>
-              )}
-            </div>
-            <button
-              type="button"
-              onClick={onSignOut}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-white/80 px-3.5 py-2 text-sm font-medium text-rose-600 shadow-sm transition hover:border-rose-300 hover:bg-rose-50"
-            >
-              <span aria-hidden="true">→</span> Sign out
-            </button>
+                <div className="pt-1.5 mt-1 border-t border-slate-100 px-2">
+                  <Link
+                    href="/onboarding"
+                    className="block text-center text-xs font-semibold text-indigo-600 hover:text-indigo-700 py-1 rounded-md hover:bg-indigo-50/60"
+                  >
+                    + Create New Workspace
+                  </Link>
+                </div>
+              </div>
+            )}
           </div>
-        </header>
+        </div>
+
+        {/* Right: Profile Avatar Icon Button ONLY */}
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setShowProfileMenu((v) => !v)}
+            className="w-8 h-8 rounded-xl bg-slate-900 text-white font-bold text-xs flex items-center justify-center hover:bg-slate-800 transition-all shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            aria-label="User profile menu"
+          >
+            {userName[0]?.toUpperCase() || 'U'}
+          </button>
+
+          {showProfileMenu && (
+            <div className="absolute right-0 mt-2 w-64 rounded-2xl border border-slate-200/90 bg-white p-3.5 shadow-xl z-50 space-y-3">
+              <div className="border-b border-slate-100 pb-2.5">
+                <p className="text-xs font-bold text-slate-900 truncate">{userName}</p>
+                <p className="text-[11px] text-slate-500 truncate mt-0.5">{userEmail}</p>
+                <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 text-[10px] font-bold capitalize">
+                  <span className="w-1 h-1 rounded-full bg-indigo-600"></span>
+                  {role || 'Member'}
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                {canInvite && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowProfileMenu(false);
+                      setShowInvite(true);
+                      setInviteError(null);
+                      setInviteSuccess(null);
+                    }}
+                    className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 rounded-lg transition-colors"
+                  >
+                    <Plus className="w-3.5 h-3.5 text-slate-400" />
+                    Invite Teammate
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={onSignOut}
+                  className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                >
+                  <LogOut className="w-3.5 h-3.5 text-rose-500" />
+                  Sign Out
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+      </header>
+
+      {/* ---------------- 2. MAIN DASHBOARD BODY (Refined 125% Scale at 100% Zoom) ---------------- */}
+      <main className="py-4 px-5 sm:px-8 max-w-7xl mx-auto w-full space-y-4 overflow-hidden">
 
         {switchError && (
-          <div
-            role="alert"
-            className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-800 shadow-sm"
-          >
+          <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">
             {switchError}
           </div>
         )}
 
-        <main className="mt-8 space-y-8">
-          {/* Welcome Banner */}
-          <div className="rounded-2xl border border-white/60 bg-white/70 p-8 shadow-xl shadow-indigo-100/60 backdrop-blur-xl">
-            <p className="text-xs font-semibold uppercase tracking-widest text-indigo-600">
-              Workspace Overview
-            </p>
-            <h1 className="mt-1.5 text-3xl font-extrabold text-slate-900">
-              Welcome to {activeName}
-            </h1>
-            <p className="mt-2 text-sm text-slate-600 max-w-2xl">
-              Navigate to specialized pages using the sidebar or quick cards below to view real task lists, AI health reports, organizational analytics, and developer activity.
-            </p>
+        {/* ------------ SECTION 1: HIGH-LEVEL ANALYTICAL METRICS ROW ------------ */}
+        <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
 
-            <dl className="mt-6 grid gap-4 sm:grid-cols-2">
-              <div className="rounded-xl border border-slate-200/80 bg-white/60 p-4">
-                <dt className="text-xs font-medium uppercase tracking-wide text-slate-400">
-                  Organization ID
-                </dt>
-                <dd className="mt-1 font-mono text-sm text-slate-800">
-                  {activeOrganizationId || 'Not set'}
-                </dd>
-              </div>
-              <div className="rounded-xl border border-slate-200/80 bg-white/60 p-4">
-                <dt className="text-xs font-medium uppercase tracking-wide text-slate-400">
-                  Your role
-                </dt>
-                <dd className="mt-1 text-sm font-semibold capitalize text-slate-800">
-                  {role || 'Not set'}
-                </dd>
-              </div>
-            </dl>
-
-            {meError && (
-              <p
-                role="status"
-                className="mt-6 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-800"
-              >
-                {meError}
-              </p>
-            )}
-          </div>
-
-          {/* Quick Navigation Cards Hub */}
-          <div>
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-400 mb-4">
-              Workspace Hub
-            </h2>
-            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              {overviewCards.map((card) => {
-                const Icon = card.icon;
-                return (
-                  <Link
-                    key={card.title}
-                    href={card.href}
-                    className="group relative flex flex-col justify-between rounded-2xl border border-white/60 bg-white/70 p-6 shadow-sm shadow-indigo-100/50 backdrop-blur-xl transition hover:-translate-y-0.5 hover:shadow-md hover:border-indigo-200"
-                  >
-                    <div>
-                      <div className="flex items-center justify-between">
-                        <div className={`flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br ${card.color} text-white shadow-sm`}>
-                          <Icon className="h-5 w-5" />
-                        </div>
-                        <ChevronRight className="h-5 w-5 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-indigo-600" />
-                      </div>
-                      <h3 className="mt-4 text-base font-semibold text-slate-900 group-hover:text-indigo-600 transition-colors">
-                        {card.title}
-                      </h3>
-                      <p className="mt-1.5 text-xs text-slate-500 leading-relaxed">
-                        {card.description}
-                      </p>
-                    </div>
-                    <div className="mt-6 flex items-center gap-1 text-xs font-semibold text-indigo-600">
-                      Open {card.title} <span aria-hidden="true">→</span>
-                    </div>
-                  </Link>
-                );
-              })}
+          {/* KPI 1: Codebase Health */}
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm space-y-1">
+            <div className="flex items-center justify-between text-xs text-slate-500 font-semibold">
+              <span>Codebase Velocity</span>
+              <GitBranch className="w-4 h-4 text-indigo-600" />
             </div>
+            <div className="text-2xl font-extrabold text-slate-900 tracking-tight">
+              {reposLoading ? '…' : repositories.length}
+            </div>
+            <p className="text-xs text-slate-500 truncate">
+              {repositories.length > 0
+                ? `${repositories.filter((r) => r.private).length} Private • ${repositories.filter((r) => !r.private).length} Public`
+                : 'No repositories connected'}
+            </p>
           </div>
-        </main>
 
-        {/* TASK-113 — Invite teammate modal (owner/admin) */}
-        {showInvite && (
-          <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-6 backdrop-blur-sm"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Invite a teammate"
-            onClick={() => setShowInvite(false)}
-          >
-            <div
-              className="w-full max-w-md rounded-2xl border border-white/60 bg-white/90 p-6 shadow-2xl shadow-indigo-500/20 backdrop-blur-xl"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-start justify-between">
+          {/* KPI 2: Communication Sync */}
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm space-y-1">
+            <div className="flex items-center justify-between text-xs text-slate-500 font-semibold">
+              <span>Communication Stream</span>
+              <MessageSquare className="w-4 h-4 text-emerald-600" />
+            </div>
+            <div className="text-2xl font-extrabold text-slate-900 tracking-tight">
+              {slackLoading ? '…' : slackChannels.length}
+            </div>
+            <p className="text-xs text-slate-500 truncate">
+              {slackChannels.length > 0 ? 'Live channel sync active' : 'No channels connected'}
+            </p>
+          </div>
+
+          {/* KPI 3: Access & Team */}
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm space-y-1">
+            <div className="flex items-center justify-between text-xs text-slate-500 font-semibold">
+              <span>Active Member</span>
+              <User className="w-4 h-4 text-amber-600" />
+            </div>
+            <div className="text-2xl font-extrabold text-slate-900 tracking-tight">
+              1
+            </div>
+            <p className="text-xs text-slate-500 truncate">
+              Role: <span className="font-semibold text-slate-700 capitalize">{role || 'Owner'}</span>
+            </p>
+          </div>
+
+          {/* KPI 4: Security Status */}
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm space-y-1">
+            <div className="flex items-center justify-between text-xs text-slate-500 font-semibold">
+              <span>Security State</span>
+              <Shield className="w-4 h-4 text-slate-700" />
+            </div>
+            <div className="text-2xl font-extrabold text-indigo-600 tracking-tight">
+              100%
+            </div>
+            <p className="text-xs text-slate-500 truncate">
+              TLS 1.3 • AES-256 Encrypted
+            </p>
+          </div>
+
+        </section>
+
+        {/* ------------ SECTION 2: 2-COLUMN ANALYTICS & HUB MATRIX ------------ */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-5 items-start">
+
+          {/* ------------ LEFT COLUMN (65% Width): Workspace Demo Analytics & Insights ------------ */}
+          <div className="lg:col-span-2 bg-white border border-slate-200/80 rounded-2xl p-4 sm:p-5 shadow-sm space-y-3.5">
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
                 <div>
-                  <h2 className="text-lg font-semibold text-slate-900">Invite a teammate</h2>
-                  <p className="mt-0.5 text-sm text-slate-500">
-                    They&apos;ll get an email with a secure invite link to join{' '}
-                    <strong>{activeName}</strong>.
-                  </p>
+                  <h2 className="text-sm sm:text-base font-bold text-slate-900">Workspace Activity Analytics</h2>
+                  <p className="text-xs text-slate-500">Cross-tool engineering velocity &amp; activity insights</p>
                 </div>
-                <button
-                  type="button"
-                  aria-label="Close"
-                  onClick={() => setShowInvite(false)}
-                  className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
-                >
-                  ✕
-                </button>
+                <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-600"></span>
+                  Demo Metrics
+                </span>
               </div>
 
-              <form onSubmit={onInvite} className="mt-5 space-y-4" noValidate>
-                <label className="block text-sm font-medium text-slate-600" htmlFor="invite-email">
-                  Email address
+              {/* Demo Analytical Widgets Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-3.5">
+
+                {/* Demo Widget 1: Weekly Commit & PR Trend */}
+                <div className="p-3.5 rounded-xl border border-slate-200/70 bg-[#FAFAFC] space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                      Commit Velocity
+                    </span>
+                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">
+                      +14.2%
+                    </span>
+                  </div>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-xl font-extrabold text-slate-900">34 Commits</span>
+                    <span className="text-xs text-slate-500">this week</span>
+                  </div>
+
+                  {/* Mini Activity Sparkline / Bar Graph */}
+                  <div className="flex items-end gap-1.5 h-7 pt-1">
+                    {[35, 60, 45, 80, 55, 90, 70].map((h, i) => (
+                      <div
+                        key={i}
+                        style={{ height: `${h}%` }}
+                        className={`flex-1 rounded-xs transition-all ${i === 5 ? 'bg-indigo-600' : 'bg-slate-200'
+                          }`}
+                        title={`Day ${i + 1}: ${h}% activity`}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                {/* Demo Widget 2: Task & Build Success Rate */}
+                <div className="p-3.5 rounded-xl border border-slate-200/70 bg-[#FAFAFC] space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                      Build Reliability
+                    </span>
+                    <span className="text-[10px] font-bold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
+                      Optimal
+                    </span>
+                  </div>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-xl font-extrabold text-slate-900">99.4%</span>
+                    <span className="text-xs text-slate-500">CI/CD uptime</span>
+                  </div>
+
+                  <div className="space-y-1 pt-1">
+                    <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                      <div className="bg-emerald-500 h-2 rounded-full w-[99%]" />
+                    </div>
+                    <div className="flex justify-between text-[11px] text-slate-400">
+                      <span>18 Passes</span>
+                      <span>0 Failures</span>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Recent Activity Timeline Preview */}
+              <div className="p-3 rounded-xl border border-slate-200/60 bg-[#FAFAFC] space-y-1.5">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                  Recent Pulse Stream
+                </span>
+                <div className="space-y-1 text-xs text-slate-700">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="flex items-center gap-1.5 truncate">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                      <strong className="text-slate-900">main</strong> branch build passed cleanly
+                    </span>
+                    <span className="text-[11px] text-slate-400 shrink-0">12m ago</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="flex items-center gap-1.5 truncate">
+                      <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
+                      PR #42 merged: <span className="text-slate-600 truncate">Authentication shell redesign</span>
+                    </span>
+                    <span className="text-[11px] text-slate-400 shrink-0">1h ago</span>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Quick Operations Matrix Shortcuts */}
+            <div className="pt-3 mt-2 border-t border-slate-100 flex items-center justify-between gap-3">
+              <span className="text-xs font-bold text-slate-500">Quick Navigation:</span>
+              <div className="flex items-center gap-1.5">
+                <Link
+                  href={`/workspace/${activeOrganizationId}/repositories`}
+                  className="px-3 py-1 rounded-md border border-slate-200 bg-[#FAFAFC] hover:bg-white text-xs font-semibold text-slate-700 transition-colors"
+                >
+                  Repositories
+                </Link>
+                <Link
+                  href={`/workspace/${activeOrganizationId}/communication`}
+                  className="px-3 py-1 rounded-md border border-slate-200 bg-[#FAFAFC] hover:bg-white text-xs font-semibold text-slate-700 transition-colors"
+                >
+                  Communication
+                </Link>
+                <Link
+                  href={`/workspace/${activeOrganizationId}/integrations`}
+                  className="px-3 py-1 rounded-md border border-slate-200 bg-[#FAFAFC] hover:bg-white text-xs font-semibold text-slate-700 transition-colors"
+                >
+                  Integrations
+                </Link>
+                <Link
+                  href={`/workspace/${activeOrganizationId}/settings`}
+                  className="px-3 py-1 rounded-md border border-slate-200 bg-[#FAFAFC] hover:bg-white text-xs font-semibold text-slate-700 transition-colors"
+                >
+                  Settings
+                </Link>
+              </div>
+            </div>
+
+          </div>
+
+          {/* ------------ RIGHT COLUMN (35% Width): Integration Health & Tenant Context ------------ */}
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-4 sm:p-5 shadow-sm space-y-3.5">
+
+            <div>
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2 mb-2.5">
+                <h3 className="text-xs sm:text-sm font-bold text-slate-900">Integration Health</h3>
+                <span className="text-[10px] font-bold text-slate-500">SYSTEM STATE</span>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between p-2 sm:p-2.5 rounded-xl bg-[#FAFAFC] border border-slate-200/60 text-xs sm:text-sm">
+                  <span className="font-semibold text-slate-800">GitHub</span>
+                  <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full">
+                    {repositories.length > 0 ? 'Active' : 'Ready'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between p-2 sm:p-2.5 rounded-xl bg-[#FAFAFC] border border-slate-200/60 text-xs sm:text-sm">
+                  <span className="font-semibold text-slate-800">Slack</span>
+                  <span className="text-xs font-bold text-slate-600 bg-slate-100 px-2.5 py-0.5 rounded-full">
+                    {slackChannels.length > 0 ? 'Connected' : 'Setup Required'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between p-2 sm:p-2.5 rounded-xl bg-[#FAFAFC] border border-slate-200/60 text-xs sm:text-sm">
+                  <span className="font-semibold text-slate-800">Jira</span>
+                  <span className="text-xs font-bold text-slate-600 bg-slate-100 px-2.5 py-0.5 rounded-full">
+                    Available
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Tenant Security & Ownership */}
+            <div className="pt-2 border-t border-slate-100 text-xs text-slate-500 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-slate-700">Workspace ID:</span>
+                <code className="font-mono text-xs text-slate-900 bg-slate-100 px-1.5 py-0.5 rounded">
+                  {activeOrganizationId ? activeOrganizationId.slice(0, 10) + '…' : 'Standard'}
+                </code>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-slate-700">Data Privacy:</span>
+                <span className="text-emerald-700 font-semibold">100% Private</span>
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+
+      </main>
+
+      {/* ---------------- 3. INVITE MODAL ---------------- */}
+      {showInvite && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-6 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setShowInvite(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <h2 className="text-lg font-bold text-slate-900">Invite a teammate</h2>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  They will receive an invitation to join <strong>{activeName}</strong>.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowInvite(false)}
+                className="text-slate-400 hover:text-slate-600 text-sm font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={onInvite} className="space-y-4" noValidate>
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wide text-slate-700 mb-1" htmlFor="invite-email">
+                  Work Email Address
                 </label>
                 <input
                   id="invite-email"
@@ -489,17 +771,19 @@ export default function WorkspaceDashboard() {
                   value={inviteEmail}
                   onChange={(e) => setInviteEmail(e.target.value)}
                   placeholder="teammate@company.com"
-                  className="w-full rounded-xl border border-slate-300 bg-white/80 px-3.5 py-2.5 text-sm outline-none transition-colors focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200"
+                  className="w-full rounded-xl border border-slate-300/80 bg-white px-3.5 py-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
                 />
+              </div>
 
-                <label className="block text-sm font-medium text-slate-600" htmlFor="invite-role">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wide text-slate-700 mb-1" htmlFor="invite-role">
                   Role
                 </label>
                 <select
                   id="invite-role"
                   value={inviteRole}
                   onChange={(e) => setInviteRole(e.target.value)}
-                  className="w-full rounded-xl border border-slate-300 bg-white/80 px-3 py-2.5 text-sm outline-none transition-colors focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200"
+                  className="w-full rounded-xl border border-slate-300/80 bg-white px-3.5 py-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
                 >
                   {INVITE_ROLES.map((r) => (
                     <option key={r.value} value={r.value}>
@@ -507,36 +791,31 @@ export default function WorkspaceDashboard() {
                     </option>
                   ))}
                 </select>
+              </div>
 
-                {inviteError && (
-                  <div
-                    role="alert"
-                    className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-800"
-                  >
-                    {inviteError}
-                  </div>
-                )}
-                {inviteSuccess && (
-                  <div
-                    role="status"
-                    className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-800"
-                  >
-                    ✓ {inviteSuccess}
-                  </div>
-                )}
+              {inviteError && (
+                <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-xs text-rose-800">
+                  {inviteError}
+                </div>
+              )}
+              {inviteSuccess && (
+                <div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 text-xs text-emerald-900">
+                  ✓ {inviteSuccess}
+                </div>
+              )}
 
-                <button
-                  type="submit"
-                  disabled={inviteBusy}
-                  className="w-full rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {inviteBusy ? 'Sending…' : 'Send invitation'}
-                </button>
-              </form>
-            </div>
+              <button
+                type="submit"
+                disabled={inviteBusy}
+                className="w-full rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-sm px-4 py-3 transition-all shadow-sm disabled:opacity-60 disabled:cursor-not-allowed mt-2"
+              >
+                {inviteBusy ? 'Sending invitation…' : 'Send Invitation'}
+              </button>
+            </form>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
     </div>
   );
 }
