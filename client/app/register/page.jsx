@@ -2,16 +2,14 @@
 
 import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { setPendingSignup, takePendingSignup } from '../../lib/pendingSignup';
 
-// Backend API base. The spec-facing var is NEXT_PUBLIC_EXPRESS_API_URL; fall
-// back to NEXT_PUBLIC_API_URL (used by /login, /onboarding, /dashboard) and
-// then the local backend default port when no client .env exists.
+// Backend API base.
 const API_BASE = process.env.NEXT_PUBLIC_EXPRESS_API_URL || 'http://localhost:5000';
 const REGISTER_ENDPOINT = `${API_BASE}/api/auth/register`;
 
-// TASK-112 pattern — strip control characters, cap length before values reach
-// form state, banners, or API payloads. (React escapes JSX output too.)
+// XSS guard
 const sanitizeParam = (value, { maxLength = 255 } = {}) => {
   let out = String(value == null ? '' : value)
     .replace(/[\u0000-\u001F\u007F]/g, '')
@@ -21,25 +19,19 @@ const sanitizeParam = (value, { maxLength = 255 } = {}) => {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-const GRID_BG = {
-  backgroundImage:
-    'linear-gradient(to right, rgba(99,102,241,0.07) 1px, transparent 1px), linear-gradient(to bottom, rgba(99,102,241,0.07) 1px, transparent 1px)',
-  backgroundSize: '44px 44px',
-};
-
-// TASK-113 — shared floating-label input styles (peer / placeholder-shown).
+// Floating label inputs matching design system
 const FLOAT_INPUT =
-  'peer w-full rounded-xl border bg-white/80 px-3.5 pb-2.5 pt-5 text-sm text-slate-900 outline-none transition-colors focus:ring-2';
+  'peer w-full rounded-xl border border-slate-300/80 bg-white px-3.5 pb-2.5 pt-5 text-sm text-slate-900 outline-none transition-all focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100';
 const FLOAT_LABEL =
-  'pointer-events-none absolute left-3.5 top-1.5 text-[11px] font-semibold uppercase tracking-wide text-indigo-500 transition-all peer-placeholder-shown:top-3.5 peer-placeholder-shown:text-sm peer-placeholder-shown:font-normal peer-placeholder-shown:normal-case peer-placeholder-shown:tracking-normal peer-placeholder-shown:text-slate-400 peer-focus:top-1.5 peer-focus:text-[11px] peer-focus:font-semibold peer-focus:uppercase peer-focus:tracking-wide peer-focus:text-indigo-500';
+  'pointer-events-none absolute left-3.5 top-1.5 text-[11px] font-bold uppercase tracking-wide text-indigo-600 transition-all peer-placeholder-shown:top-3.5 peer-placeholder-shown:text-sm peer-placeholder-shown:font-normal peer-placeholder-shown:normal-case peer-placeholder-shown:tracking-normal peer-placeholder-shown:text-slate-400 peer-focus:top-1.5 peer-focus:text-[11px] peer-focus:font-bold peer-focus:uppercase peer-focus:tracking-wide peer-focus:text-indigo-600';
 
 function Banner({ kind, children }) {
   return (
     <div
       role={kind === 'success' ? 'status' : 'alert'}
-      className={`rounded-xl border px-3 py-2.5 text-sm ${
+      className={`rounded-xl border px-3.5 py-3 text-xs sm:text-sm ${
         kind === 'success'
-          ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+          ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
           : 'border-rose-200 bg-rose-50 text-rose-800'
       }`}
     >
@@ -51,11 +43,8 @@ function Banner({ kind, children }) {
 function RegisterInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  // Prefill the email when arriving from an invite-locked /login
-  // ("Don't have an account? Sign up" keeps ?orgEmail=…).
   const orgEmail = sanitizeParam(searchParams.get('orgEmail'));
 
-  // Restore an in-progress signup when returning from /verify-email (Back).
   const [restored] = useState(() => takePendingSignup());
 
   const [username, setUsername] = useState(restored.username || '');
@@ -99,10 +88,6 @@ function RegisterInner() {
         return;
       }
 
-      // The account is created UNVERIFIED — route to the OTP verification step.
-      // The user must verify their email before they can sign in and onboard.
-      // Save the form values in a transient in-memory store so a "Back" from
-      // /verify-email restores them (e.g. if the email was mistyped).
       setPendingSignup({ username, email, password, confirm });
       router.replace(`/verify-email?email=${encodeURIComponent(email.trim())}`);
     } catch (err) {
@@ -113,34 +98,62 @@ function RegisterInner() {
   };
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-slate-50 p-6 text-slate-900">
-      <div aria-hidden="true" className="absolute inset-0" style={GRID_BG} />
-      <div
-        aria-hidden="true"
-        className="absolute -top-32 -left-24 h-96 w-96 rounded-full bg-indigo-300/40 blur-3xl"
-      />
-      <div
-        aria-hidden="true"
-        className="absolute -bottom-32 -right-24 h-96 w-96 rounded-full bg-violet-300/40 blur-3xl"
-      />
+    <div className="min-h-screen bg-[#FAFAFC] text-slate-900 flex flex-col justify-between selection:bg-indigo-100 selection:text-indigo-900">
+      
+      {/* ------------ Top Header Bar (Minimal Logo Only) ------------ */}
+      <header className="px-6 py-6 max-w-7xl w-full mx-auto flex items-center justify-between">
+        <Link href="/" className="flex items-center gap-2.5 group">
+          <div className="h-8 w-8 rounded-lg bg-slate-900 flex items-center justify-center text-white shadow-sm group-hover:scale-105 transition-transform">
+            <div className="flex items-center gap-0.5">
+              <span className="w-1 h-3.5 bg-white rounded-full"></span>
+              <span className="w-1 h-5 bg-white rounded-full"></span>
+              <span className="w-1 h-3.5 bg-white rounded-full"></span>
+            </div>
+          </div>
+          <span className="text-xl font-bold tracking-tight text-slate-900">
+            PulseOps
+          </span>
+        </Link>
+      </header>
 
-      <div className="relative w-full max-w-md">
-        <div className="rounded-3xl border border-white/60 bg-white/70 p-8 shadow-xl shadow-indigo-500/10 backdrop-blur-xl">
-          <div className="mb-6 text-center">
-            <h1 className="bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-600 bg-clip-text text-2xl font-bold tracking-tight text-transparent">
-              PulseOps
-            </h1>
-            <p className="mt-1 text-sm text-slate-500">Create your account</p>
+      {/* ------------ Main Form Content ------------ */}
+      <main className="flex-1 flex items-center justify-center px-4 py-8 sm:px-6">
+        <div className="w-full max-w-md relative">
+          
+          {/* Subtle Handwritten Annotation */}
+          <div className="hidden sm:block absolute -top-5 -right-6 rotate-6 z-10 pointer-events-none">
+            <span className="font-handwriting text-slate-700 text-lg font-bold bg-[#FFFDF7] border border-amber-200/70 px-2.5 py-1 rounded-lg shadow-sm">
+              One workspace. ✨
+            </span>
           </div>
 
-          <form onSubmit={onSubmit} noValidate>
-            {error && (
-              <div className="mb-4">
-                <Banner kind="error">{error.message}</Banner>
+          {/* Card Container */}
+          <div className="bg-white border border-slate-200/80 rounded-2xl sm:rounded-3xl p-6 sm:p-8 shadow-md shadow-slate-900/5">
+            
+            {/* Header Content */}
+            <div className="text-center mb-6">
+              <div className="inline-flex items-center gap-1.5 mb-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 inline-block"></span>
+                <span className="text-[11px] font-bold tracking-widest text-indigo-600 uppercase">
+                  GET STARTED
+                </span>
               </div>
-            )}
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+                Create your PulseOps account.
+              </h1>
+              <p className="mt-2 text-xs sm:text-sm text-slate-500">
+                Join your team and unify your development workflow.
+              </p>
+            </div>
 
-              <div className="mb-4">
+            <form onSubmit={onSubmit} className="space-y-4" noValidate>
+              {error && (
+                <div className="mb-2">
+                  <Banner kind="error">{error.message}</Banner>
+                </div>
+              )}
+
+              <div>
                 <div className="relative">
                   <input
                     id="register-username"
@@ -150,18 +163,18 @@ function RegisterInner() {
                     value={username}
                     placeholder=" "
                     onChange={(e) => setUsername(e.target.value)}
-                    className={`${FLOAT_INPUT} border-slate-300 focus:border-indigo-400 focus:ring-indigo-200`}
+                    className={FLOAT_INPUT}
                   />
                   <label htmlFor="register-username" className={FLOAT_LABEL}>
                     Username
                   </label>
                 </div>
                 {fieldErrors.username && (
-                  <p className="mt-1.5 text-xs text-rose-600">{fieldErrors.username}</p>
+                  <p className="mt-1 text-xs text-rose-600">{fieldErrors.username}</p>
                 )}
               </div>
 
-              <div className="mb-4">
+              <div>
                 <div className="relative">
                   <input
                     id="register-email"
@@ -171,18 +184,18 @@ function RegisterInner() {
                     value={email}
                     placeholder=" "
                     onChange={(e) => setEmail(e.target.value)}
-                    className={`${FLOAT_INPUT} border-slate-300 focus:border-indigo-400 focus:ring-indigo-200`}
+                    className={FLOAT_INPUT}
                   />
                   <label htmlFor="register-email" className={FLOAT_LABEL}>
-                    Email
+                    Work Email
                   </label>
                 </div>
                 {fieldErrors.email && (
-                  <p className="mt-1.5 text-xs text-rose-600">{fieldErrors.email}</p>
+                  <p className="mt-1 text-xs text-rose-600">{fieldErrors.email}</p>
                 )}
               </div>
 
-              <div className="mb-4">
+              <div>
                 <div className="relative">
                   <input
                     id="register-password"
@@ -192,19 +205,19 @@ function RegisterInner() {
                     value={password}
                     placeholder=" "
                     onChange={(e) => setPassword(e.target.value)}
-                    className={`${FLOAT_INPUT} border-slate-300 focus:border-indigo-400 focus:ring-indigo-200`}
+                    className={FLOAT_INPUT}
                   />
                   <label htmlFor="register-password" className={FLOAT_LABEL}>
                     Password
                   </label>
                 </div>
-                <p className="mt-1.5 text-xs text-slate-400">At least 8 characters.</p>
+                <p className="mt-1 text-[11px] text-slate-400">At least 8 characters.</p>
                 {fieldErrors.password && (
-                  <p className="mt-1.5 text-xs text-rose-600">{fieldErrors.password}</p>
+                  <p className="mt-1 text-xs text-rose-600">{fieldErrors.password}</p>
                 )}
               </div>
 
-              <div className="mb-4">
+              <div>
                 <div className="relative">
                   <input
                     id="register-confirm"
@@ -214,45 +227,55 @@ function RegisterInner() {
                     value={confirm}
                     placeholder=" "
                     onChange={(e) => setConfirm(e.target.value)}
-                    className={`${FLOAT_INPUT} border-slate-300 focus:border-indigo-400 focus:ring-indigo-200`}
+                    className={FLOAT_INPUT}
                   />
                   <label htmlFor="register-confirm" className={FLOAT_LABEL}>
-                    Confirm password
+                    Confirm Password
                   </label>
                 </div>
                 {fieldErrors.confirm && (
-                  <p className="mt-1.5 text-xs text-rose-600">{fieldErrors.confirm}</p>
+                  <p className="mt-1 text-xs text-rose-600">{fieldErrors.confirm}</p>
                 )}
               </div>
 
               <button
                 type="submit"
                 disabled={busy}
-                className="w-full rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                className="w-full rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-sm px-4 py-3 transition-all shadow-sm disabled:opacity-60 disabled:cursor-not-allowed mt-2"
               >
                 {busy ? 'Creating account…' : 'Create Account'}
               </button>
             </form>
-        </div>
 
-        <p className="mt-5 text-center text-sm text-slate-500">
-          Already have an account?{' '}
-          <a
-            href="/login"
-            className="font-semibold text-indigo-600 underline-offset-2 hover:underline"
-          >
-            Sign in
-          </a>
-        </p>
-      </div>
+          </div>
+
+          {/* Footer Link Under Card */}
+          <p className="mt-6 text-center text-xs sm:text-sm text-slate-600">
+            Already have an account?{' '}
+            <a
+              href="/login"
+              className="font-semibold text-indigo-600 hover:text-indigo-700 underline-offset-2 hover:underline"
+            >
+              Sign in
+            </a>
+          </p>
+
+        </div>
+      </main>
+
+      {/* ------------ Bottom Footer Strip ------------ */}
+      <footer className="px-6 py-6 text-center text-xs text-slate-400">
+        © {new Date().getFullYear()} PulseOps, Inc. All rights reserved.
+      </footer>
+
     </div>
   );
 }
 
 function RegisterFallback() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50 text-sm text-slate-400">
-      <div className="h-10 w-10 animate-spin rounded-full border-4 border-indigo-200 border-t-indigo-500" />
+    <div className="flex min-h-screen items-center justify-center bg-[#FAFAFC] text-sm text-slate-400">
+      <div className="h-8 w-8 animate-spin rounded-full border-2 border-indigo-200 border-t-indigo-600" />
     </div>
   );
 }
@@ -264,4 +287,3 @@ export default function RegisterPage() {
     </Suspense>
   );
 }
-

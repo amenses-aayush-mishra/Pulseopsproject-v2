@@ -1,17 +1,15 @@
 'use client';
-import { signIn, useSession } from 'next-auth/react';
 
+import { signIn, useSession } from 'next-auth/react';
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
 
-// Backend API base. In dev (no client .env), Next does not inline
-// NEXT_PUBLIC_API_URL, so fall back to the local backend default port.
+// Backend API base.
 const API_BASE = process.env.NEXT_PUBLIC_EXPRESS_API_URL || 'http://localhost:5000';
 const LOGIN_ENDPOINT = `${API_BASE}/api/auth/login`;
 
-// TASK-112: query-parameter / XSS guard — strip control characters, enforce
-// type + length caps BEFORE values reach form state, rendered banners, or API
-// payloads. (React escapes JSX output too; this is defense-in-depth.)
+// XSS guard
 const sanitizeParam = (value, { alphanumeric = false, maxLength = 255 } = {}) => {
   let out = String(value == null ? '' : value)
     .replace(/[\u0000-\u001F\u007F]/g, '')
@@ -20,27 +18,21 @@ const sanitizeParam = (value, { alphanumeric = false, maxLength = 255 } = {}) =>
   return out.slice(0, maxLength);
 };
 
-const GRID_BG = {
-  backgroundImage:
-    'linear-gradient(to right, rgba(99,102,241,0.07) 1px, transparent 1px), linear-gradient(to bottom, rgba(99,102,241,0.07) 1px, transparent 1px)',
-  backgroundSize: '44px 44px',
-};
-
-// TASK-113 — shared floating-label input styles (peer / placeholder-shown).
+// Floating label inputs matching design system
 const FLOAT_INPUT =
-  'peer w-full rounded-xl border bg-white/80 px-3.5 pb-2.5 pt-5 text-sm text-slate-900 outline-none transition-colors focus:ring-2';
+  'peer w-full rounded-xl border border-slate-300/80 bg-white px-3.5 pb-2.5 pt-5 text-sm text-slate-900 outline-none transition-all focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100';
 const FLOAT_LABEL =
-  'pointer-events-none absolute left-3.5 top-1.5 text-[11px] font-semibold uppercase tracking-wide text-indigo-500 transition-all peer-placeholder-shown:top-3.5 peer-placeholder-shown:text-sm peer-placeholder-shown:font-normal peer-placeholder-shown:normal-case peer-placeholder-shown:tracking-normal peer-placeholder-shown:text-slate-400 peer-focus:top-1.5 peer-focus:text-[11px] peer-focus:font-semibold peer-focus:uppercase peer-focus:tracking-wide peer-focus:text-indigo-500';
+  'pointer-events-none absolute left-3.5 top-1.5 text-[11px] font-bold uppercase tracking-wide text-indigo-600 transition-all peer-placeholder-shown:top-3.5 peer-placeholder-shown:text-sm peer-placeholder-shown:font-normal peer-placeholder-shown:normal-case peer-placeholder-shown:tracking-normal peer-placeholder-shown:text-slate-400 peer-focus:top-1.5 peer-focus:text-[11px] peer-focus:font-bold peer-focus:uppercase peer-focus:tracking-wide peer-focus:text-indigo-600';
 
 function LockedBanner({ orgEmail }) {
   return (
     <div
       role="status"
-      className="flex items-start gap-2 rounded-xl border border-indigo-300/60 bg-indigo-50/80 px-3 py-2.5 text-sm text-indigo-800"
+      className="flex items-start gap-2.5 rounded-xl border border-indigo-200 bg-indigo-50/80 px-3.5 py-3 text-xs sm:text-sm text-indigo-900"
     >
-      <span aria-hidden="true">🔒</span>
+      <span aria-hidden="true" className="shrink-0">🔒</span>
       <span>
-        <strong>Locked to invited email:</strong> {orgEmail}
+        <strong className="font-semibold">Locked to invited email:</strong> {orgEmail}
       </span>
     </div>
   );
@@ -53,11 +45,11 @@ function ErrorBanner({ error, email }) {
   return (
     <div
       role="alert"
-      className={`rounded-xl border px-3 py-2.5 text-sm ${
+      className={`rounded-xl border px-3.5 py-3 text-xs sm:text-sm ${
         isMismatch
           ? 'border-rose-200 bg-rose-50 text-rose-800'
           : isUnverified
-            ? 'border-amber-200 bg-amber-50 text-amber-800'
+            ? 'border-amber-200 bg-amber-50 text-amber-900'
             : 'border-rose-200 bg-rose-50 text-rose-800'
       }`}
     >
@@ -68,7 +60,7 @@ function ErrorBanner({ error, email }) {
         <div className="mt-2">
           <a
             href={`/verify-email?email=${encodeURIComponent(email || '')}`}
-            className="font-semibold text-amber-800 underline underline-offset-2 hover:text-amber-900"
+            className="font-semibold text-amber-900 underline underline-offset-2 hover:text-amber-950"
           >
             Resend verification code
           </a>
@@ -81,8 +73,6 @@ function ErrorBanner({ error, email }) {
 const OAUTH_ERROR_MESSAGES = {
   Configuration:
     'Single sign-on is not configured in this environment. Please sign in with email & password.',
-  // A GET /api/auth/signin/google (direct hit or providers not yet loaded
-  // client-side) redirects here with ?error=<provider-id> for a missing provider.
   google:
     'Google Single Sign-On is not configured in this environment. Please sign in with email & password.',
   github:
@@ -102,7 +92,7 @@ function NextAuthErrorBanner({ code }) {
   return (
     <div
       role="alert"
-      className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-800"
+      className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3 text-xs sm:text-sm text-amber-900"
     >
       {OAUTH_ERROR_MESSAGES[code] || 'Sign-in failed. Please try again.'}
     </div>
@@ -113,7 +103,7 @@ function LoginInner() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
-  // TASK-112: sanitize URL params before they reach state/banners/payloads.
+
   const orgEmail = sanitizeParam(searchParams.get('orgEmail'), { maxLength: 255 });
   const inviteToken = sanitizeParam(searchParams.get('inviteToken'), {
     alphanumeric: true,
@@ -128,16 +118,9 @@ function LoginInner() {
   const [busy, setBusy] = useState(false);
   const locked = Boolean(orgEmail);
 
-  // Tracks whether a post-login redirect is already in flight from onSubmit.
-  // Prevents the session useEffect from firing a second, conflicting redirect.
   const redirectedRef = useRef(false);
-
-  // Issue 2 — runtime truth for which OAuth providers the NextAuth handler
-  // actually exposes (mirrors the guarded provider list in the auth route).
-  // null = still loading; SSO buttons fail-open until the check resolves, and
-  // the signIn() try/catch (plus pages.error) are the backstops.
   const [oauthProviders, setOauthProviders] = useState(null);
-  // NextAuth redirects failed SSO to pages.error → /login?error=<code>.
+
   const oauthErrorParam = sanitizeParam(searchParams.get('error'), {
     alphanumeric: true,
     maxLength: 64,
@@ -159,58 +142,30 @@ function LoginInner() {
     : [];
   const providerLabel = (provider) => (provider === 'google' ? 'Google' : 'GitHub');
 
-  // Auto-redirect already-authenticated users (e.g. OAuth session hydrated
-  // after an OAuth sign-in round-trip). Skip entirely if:
-  //   - session is loading or unauthenticated
-  //   - form is submitting (busy) — avoids races with credential logins
-  //   - a manual redirect from onSubmit is already in flight
- useEffect(() => {
-  if (status === 'loading' || busy) return;
+  useEffect(() => {
+    if (status === 'loading' || busy) return;
+    if (redirectedRef.current) return;
 
-  if (redirectedRef.current) return; // manual redirect already in progress
+    const params = new URLSearchParams(window.location.search);
+    const hasOrg = params.get('orgEmail') || params.get('email');
+    const hasToken = params.get('inviteToken') || params.get('token');
+    if (Boolean(hasOrg || hasToken)) return;
 
-  // If this is an invitation login, DO NOT redirect based on
-  // an existing authenticated session.
-  const searchParams = new URLSearchParams(window.location.search);
-  const orgEmail =
-    searchParams.get('orgEmail') || searchParams.get('email');
-  const inviteToken =
-    searchParams.get('inviteToken') || searchParams.get('token');
+    if (status === 'unauthenticated') return;
 
-  const isInvitationLogin = Boolean(orgEmail || inviteToken);
+    if (status === 'authenticated' && session?.user) {
+      const u = session.user;
+      const wCount = u.workspaceCount ?? (u.hasWorkspace ? 1 : 0);
+      redirectedRef.current = true;
 
-  if (isInvitationLogin) {
-    return;
-  }
-
-  // Normal login flow
-  if (status === 'unauthenticated') return;
-
-  if (status === 'authenticated' && session?.user) {
-    const u = session.user;
-
-    const wCount = u.workspaceCount ?? (u.hasWorkspace ? 1 : 0);
-
-    redirectedRef.current = true;
-
-    if (wCount === 0) {
-      window.location.href = '/onboarding';
-    } else if (wCount === 1) {
-      const wsId =
-        u.activeOrganizationId ||
-        (u.workspaces?.[0]?.id ?? null);
-
-      window.location.href = wsId
-        ? `/workspace/${wsId}`
-        : '/onboarding';
-    } else {
-      // 2+ workspaces — land in the active workspace shell; workspace
-      // switching is available there via the dashboard switcher.
-      const wsId = u.activeOrganizationId || (u.workspaces?.[0]?.id ?? null);
-      window.location.href = wsId ? `/workspace/${wsId}` : '/onboarding';
+      if (wCount === 0) {
+        window.location.href = '/onboarding';
+      } else {
+        const wsId = u.activeOrganizationId || (u.workspaces?.[0]?.id ?? null);
+        window.location.href = wsId ? `/workspace/${wsId}` : '/onboarding';
+      }
     }
-  }
-}, [status, session, router, busy]);
+  }, [status, session, router, busy]);
 
   const onSubmit = async (e) => {
     e.preventDefault();
@@ -223,13 +178,10 @@ function LoginInner() {
 
       const result = await signIn('credentials', {
         redirect: false,
-        ...payload
+        ...payload,
       });
 
       if (!result?.ok) {
-        // NextAuth only surfaces the backend message (custom `code` is lost in
-        // the credentials redirect), so map the deterministic unverified-account
-        // message back to its code to drive the amber banner + resend-OTP link.
         const msg = result?.error || 'Login failed.';
         setError({
           message: msg,
@@ -238,46 +190,34 @@ function LoginInner() {
         return;
       }
 
-      // 1. Fetch hydrated NextAuth session to execute deterministic routing
       const sessionRes = await fetch('/api/auth/session');
       const sessionData = await sessionRes.json();
       const user = sessionData?.user || {};
 
-      // 2. Store token for components bypassing NextAuth (legacy)
       if (sessionData?.accessToken) {
-        try { localStorage.setItem('pulseops_token', sessionData.accessToken); } catch { /* private mode */ }
+        try { localStorage.setItem('pulseops_token', sessionData.accessToken); } catch {}
       }
 
-      // Mark that we are handling the redirect from here; suppresses
-      // the session useEffect redirect to avoid a double-navigate race.
       redirectedRef.current = true;
-
-      // 3. DETERMINISTIC REDIRECT MATRIX
       const { hasWorkspace, activeOrganizationId, isInvitedUser } = user;
 
       if (isInvitedUser || orgEmail) {
-  // Invitation login: route to the invited workspace.
-  // The authenticated account is now the account that just logged in.
-  const targetOrg = activeOrganizationId || searchParams.get('workspaceId');
-
-  if (targetOrg) {
-    window.location.href = `/workspace/${targetOrg}/invitations`;
-  } else {
-    window.location.href = activeOrganizationId
-      ? `/workspace/${activeOrganizationId}`
-      : '/onboarding';
-  }
-} else if (hasWorkspace) {
-        // CASE 1: Existing User -> land in the active workspace shell (the
-        // dashboard switcher provides workspace switching from there).
+        const targetOrg = activeOrganizationId || searchParams.get('workspaceId');
+        if (targetOrg) {
+          window.location.href = `/workspace/${targetOrg}/invitations`;
+        } else {
+          window.location.href = activeOrganizationId
+            ? `/workspace/${activeOrganizationId}`
+            : '/onboarding';
+        }
+      } else if (hasWorkspace) {
         const wsId = activeOrganizationId || user.workspaces?.[0]?.id;
         window.location.href = wsId ? `/workspace/${wsId}` : '/onboarding';
       } else {
-        // CASE 3: New User -> Route to Onboarding
         window.location.href = '/onboarding';
       }
     } catch (err) {
-      redirectedRef.current = false; // allow retry
+      redirectedRef.current = false;
       setError({ message: 'Could not reach the authentication server. Please try again.' });
     } finally {
       setBusy(false);
@@ -286,8 +226,6 @@ function LoginInner() {
 
   const onOAuth = async (provider) => {
     setError(null);
-    // Issue 2 — block the signIn() call (and the redirect to the NextAuth error
-    // page) entirely when the provider is not configured in this environment.
     if (oauthProviders && !oauthProviders[provider]) {
       setError({
         message: `${providerLabel(provider)} Single Sign-On is not configured in this environment. Please sign in with email & password.`,
@@ -295,8 +233,6 @@ function LoginInner() {
       return;
     }
     try {
-      // Preserve the invite context across the OAuth round trip so the login
-      // flow resumes with the org email + invite token intact.
       const cb = new URL(window.location.href);
       if (orgEmail) cb.searchParams.set('orgEmail', orgEmail);
       if (inviteToken) cb.searchParams.set('inviteToken', inviteToken);
@@ -310,207 +246,232 @@ function LoginInner() {
       });
     }
   };
+
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-slate-50 p-6 text-slate-900">
-      <div aria-hidden="true" className="absolute inset-0" style={GRID_BG} />
-      <div
-        aria-hidden="true"
-        className="absolute -top-32 -left-24 h-96 w-96 rounded-full bg-indigo-300/40 blur-3xl"
-      />
-      <div
-        aria-hidden="true"
-        className="absolute -bottom-32 -right-24 h-96 w-96 rounded-full bg-violet-300/40 blur-3xl"
-      />
-
-      <div className="relative w-full max-w-md">
-        <div className="rounded-3xl border border-white/60 bg-white/70 p-8 shadow-xl shadow-indigo-500/10 backdrop-blur-xl">
-          <div className="mb-6 text-center">
-            <h1 className="bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-600 bg-clip-text text-2xl font-bold tracking-tight text-transparent">
-              PulseOps
-            </h1>
-            <p className="mt-1 text-sm text-slate-500">
-              Sign in to your workspace{locked ? ' with your invitation' : ''}
-            </p>
+    <div className="min-h-screen bg-[#FAFAFC] text-slate-900 flex flex-col justify-between selection:bg-indigo-100 selection:text-indigo-900">
+      
+      {/* ------------ Top Header Bar (Minimal Logo Only) ------------ */}
+      <header className="px-6 py-6 max-w-7xl w-full mx-auto flex items-center justify-between">
+        <Link href="/" className="flex items-center gap-2.5 group">
+          <div className="h-8 w-8 rounded-lg bg-slate-900 flex items-center justify-center text-white shadow-sm group-hover:scale-105 transition-transform">
+            <div className="flex items-center gap-0.5">
+              <span className="w-1 h-3.5 bg-white rounded-full"></span>
+              <span className="w-1 h-5 bg-white rounded-full"></span>
+              <span className="w-1 h-3.5 bg-white rounded-full"></span>
+            </div>
           </div>
+          <span className="text-xl font-bold tracking-tight text-slate-900">
+            PulseOps
+          </span>
+        </Link>
+      </header>
 
-          {/* Tab switcher: hide SSO tab when locked to an invited email */}
-          <div
-            role="tablist"
-            aria-label="Sign-in method"
-            className="mb-6 grid grid-cols-2 gap-1 rounded-xl bg-slate-100/80 p-1"
-          >
-            <button
-              type="button"
-              role="tab"
-              aria-selected={tab === 'credentials'}
-              onClick={() => setTab('credentials')}
-              className={`rounded-lg px-3 py-2 text-sm transition-all ${
-                tab === 'credentials'
-                  ? 'bg-white font-semibold text-indigo-700 shadow-sm'
-                  : 'font-medium text-slate-500 hover:text-slate-700'
-              }`}
+      {/* ------------ Main Form Content ------------ */}
+      <main className="flex-1 flex items-center justify-center px-4 py-8 sm:px-6">
+        <div className="w-full max-w-md">
+          
+          {/* Card Container */}
+          <div className="bg-white border border-slate-200/80 rounded-2xl sm:rounded-3xl p-6 sm:p-8 shadow-md shadow-slate-900/5">
+            
+            {/* Header Content */}
+            <div className="text-center mb-6">
+              <div className="inline-flex items-center gap-1.5 mb-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 inline-block"></span>
+                <span className="text-[11px] font-bold tracking-widest text-indigo-600 uppercase">
+                  WELCOME BACK
+                </span>
+              </div>
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+                Sign in to PulseOps.
+              </h1>
+              <p className="mt-2 text-xs sm:text-sm text-slate-500">
+                {locked
+                  ? 'Locked to your organization invitation'
+                  : 'Enter your credentials to access your workspace.'}
+              </p>
+            </div>
+
+            {/* Tab switcher: Credentials vs Single sign-on */}
+            <div
+              role="tablist"
+              aria-label="Sign-in method"
+              className="mb-6 grid grid-cols-2 gap-1 rounded-xl bg-slate-100/80 p-1"
             >
-              Email &amp; password
-            </button>
-            {/* Hide SSO tab when email is locked to an invitation */}
-            {!locked && (
               <button
                 type="button"
                 role="tab"
-                aria-selected={tab === 'oauth'}
-                onClick={() => setTab('oauth')}
-                className={`rounded-lg px-3 py-2 text-sm transition-all ${
-                  tab === 'oauth'
-                    ? 'bg-white font-semibold text-indigo-700 shadow-sm'
-                    : 'font-medium text-slate-500 hover:text-slate-700'
+                aria-selected={tab === 'credentials'}
+                onClick={() => setTab('credentials')}
+                className={`rounded-lg px-3 py-2 text-xs sm:text-sm transition-all ${
+                  tab === 'credentials'
+                    ? 'bg-white font-bold text-slate-900 shadow-sm'
+                    : 'font-medium text-slate-500 hover:text-slate-900'
                 }`}
               >
-                Single sign-on
+                Email &amp; password
               </button>
-            )}
-          </div>
-
-          {oauthErrorParam && <NextAuthErrorBanner code={oauthErrorParam} />}
-          {verified && !error && (
-            <div
-              role="status"
-              className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-800"
-            >
-              ✓ Email verified successfully. You can now sign in.
-            </div>
-          )}
-          {locked && (
-            <div className="mb-4">
-              <LockedBanner orgEmail={orgEmail.trim()} />
-            </div>
-          )}
-          <div className="mb-4">
-            <ErrorBanner error={error} email={email} />
-          </div>
-
-          {tab === 'credentials' ? (
-            <form onSubmit={onSubmit} className="space-y-5" noValidate>
-              <div className="relative">
-                <input
-                  id="login-email"
-                  type="email"
-                  name="email"
-                  autoComplete="email"
-                  value={email}
-                  readOnly={locked}
-                  placeholder=" "
-                  onChange={(e) => setEmail(e.target.value)}
-                  className={`${FLOAT_INPUT} ${
-                    locked
-                      ? 'cursor-not-allowed border-indigo-300 bg-indigo-50/60 text-indigo-900 focus:ring-indigo-300'
-                      : 'border-slate-300 focus:border-indigo-400 focus:ring-indigo-200'
+              {!locked && (
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === 'oauth'}
+                  onClick={() => setTab('oauth')}
+                  className={`rounded-lg px-3 py-2 text-xs sm:text-sm transition-all ${
+                    tab === 'oauth'
+                      ? 'bg-white font-bold text-slate-900 shadow-sm'
+                      : 'font-medium text-slate-500 hover:text-slate-900'
                   }`}
-                />
-                <label htmlFor="login-email" className={FLOAT_LABEL}>
-                  Work email
-                </label>
-              </div>
-              {locked && (
-                <p className="mt-1.5 text-xs text-indigo-600">
-                  Email is locked to this invitation. Missing one?{' '}
-                  <a href="/login" className="underline underline-offset-2">
-                    Sign in with another email
-                  </a>
-                </p>
-              )}
-
-
-              <div className="relative">
-                <input
-                  id="login-password"
-                  type="password"
-                  name="password"
-                  autoComplete="current-password"
-                  value={password}
-                  placeholder=" "
-                  onChange={(e) => setPassword(e.target.value)}
-                  className={`${FLOAT_INPUT} border-slate-300 focus:border-indigo-400 focus:ring-indigo-200`}
-                />
-                <label htmlFor="login-password" className={FLOAT_LABEL}>
-                  Password
-                </label>
-              </div>
-
-              <div className="flex justify-end">
-                <a
-                  href="/forgot-password"
-                  className="text-xs font-medium text-indigo-600 underline-offset-2 hover:underline"
                 >
-                  Forgot password?
-                </a>
-              </div>
-
-              <button
-                type="submit"
-                disabled={busy}
-                className="w-full rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {busy ? 'Signing in…' : 'Sign In'}
-              </button>
-            </form>
-          ) : (
-            <div className="space-y-3">
-              {missingOAuth.length > 0 && (
-                <div
-                  role="status"
-                  className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-800"
-                >
-                  {missingOAuth.length === 2
-                    ? 'Google / GitHub Single Sign-On is not configured in this environment. Please sign in with email & password.'
-                    : `${providerLabel(missingOAuth[0])} Single Sign-On is not configured in this environment. Please sign in with email & password.`}
-                </div>
+                  Single sign-on
+                </button>
               )}
-              <p className="text-sm text-slate-500">
-                Continue with Google or GitHub. Your organization and invitation
-                are linked to this account automatically.
-              </p>
-              <button
-                type="button"
-                onClick={() => onOAuth('google')}
-                disabled={busy || Boolean(oauthProviders && !oauthProviders.google)}
-                className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white/80 px-3 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-white disabled:opacity-60"
-              >
-                <span aria-hidden="true">G</span> Google
-              </button>
-              <button
-                type="button"
-                onClick={() => onOAuth('github')}
-                disabled={busy || Boolean(oauthProviders && !oauthProviders.github)}
-                className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white/80 px-3 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-white disabled:opacity-60"
-              >
-                <span aria-hidden="true">G</span> GitHub
-              </button>
             </div>
-          )}
+
+            {oauthErrorParam && <NextAuthErrorBanner code={oauthErrorParam} />}
+            {verified && !error && (
+              <div
+                role="status"
+                className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-3 text-xs sm:text-sm text-emerald-900"
+              >
+                ✓ Email verified successfully. You can now sign in.
+              </div>
+            )}
+            {locked && (
+              <div className="mb-4">
+                <LockedBanner orgEmail={orgEmail.trim()} />
+              </div>
+            )}
+            <div className="mb-4">
+              <ErrorBanner error={error} email={email} />
+            </div>
+
+            {tab === 'credentials' ? (
+              <form onSubmit={onSubmit} className="space-y-4" noValidate>
+                <div className="relative">
+                  <input
+                    id="login-email"
+                    type="email"
+                    name="email"
+                    autoComplete="email"
+                    value={email}
+                    readOnly={locked}
+                    placeholder=" "
+                    onChange={(e) => setEmail(e.target.value)}
+                    className={`${FLOAT_INPUT} ${
+                      locked
+                        ? 'cursor-not-allowed border-indigo-200 bg-indigo-50/50 text-indigo-900 focus:ring-indigo-200'
+                        : ''
+                    }`}
+                  />
+                  <label htmlFor="login-email" className={FLOAT_LABEL}>
+                    Work Email
+                  </label>
+                </div>
+                {locked && (
+                  <p className="mt-1.5 text-xs text-indigo-600">
+                    Email is locked to this invitation. Missing one?{' '}
+                    <a href="/login" className="underline underline-offset-2">
+                      Sign in with another email
+                    </a>
+                  </p>
+                )}
+
+                <div className="relative">
+                  <input
+                    id="login-password"
+                    type="password"
+                    name="password"
+                    autoComplete="current-password"
+                    value={password}
+                    placeholder=" "
+                    onChange={(e) => setPassword(e.target.value)}
+                    className={FLOAT_INPUT}
+                  />
+                  <label htmlFor="login-password" className={FLOAT_LABEL}>
+                    Password
+                  </label>
+                </div>
+
+                <div className="flex justify-end pt-0.5">
+                  <a
+                    href="/forgot-password"
+                    className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 underline-offset-2 hover:underline"
+                  >
+                    Forgot password?
+                  </a>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={busy}
+                  className="w-full rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-sm px-4 py-3 transition-all shadow-sm disabled:opacity-60 disabled:cursor-not-allowed mt-2"
+                >
+                  {busy ? 'Signing in…' : 'Sign In'}
+                </button>
+              </form>
+            ) : (
+              <div className="space-y-3">
+                {missingOAuth.length > 0 && (
+                  <div
+                    role="status"
+                    className="rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3 text-xs sm:text-sm text-amber-900"
+                  >
+                    {missingOAuth.length === 2
+                      ? 'Google / GitHub Single Sign-On is not configured in this environment. Please sign in with email & password.'
+                      : `${providerLabel(missingOAuth[0])} Single Sign-On is not configured in this environment. Please sign in with email & password.`}
+                  </div>
+                )}
+                <p className="text-xs sm:text-sm text-slate-500 leading-relaxed">
+                  Continue with Google or GitHub. Your workspace invitation is linked automatically.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => onOAuth('google')}
+                  disabled={busy || Boolean(oauthProviders && !oauthProviders.google)}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 px-4 py-2.5 text-xs sm:text-sm font-semibold text-slate-700 transition-colors disabled:opacity-60"
+                >
+                  <span aria-hidden="true" className="font-bold">G</span> Google
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onOAuth('github')}
+                  disabled={busy || Boolean(oauthProviders && !oauthProviders.github)}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 px-4 py-2.5 text-xs sm:text-sm font-semibold text-slate-700 transition-colors disabled:opacity-60"
+                >
+                  <span aria-hidden="true" className="font-bold">GH</span> GitHub
+                </button>
+              </div>
+            )}
+
+          </div>
+
+          {/* Footer Link Under Card */}
+          <p className="mt-6 text-center text-xs sm:text-sm text-slate-600">
+            Don&apos;t have an account?{' '}
+            <a
+              href={locked ? `/register?orgEmail=${encodeURIComponent(orgEmail)}` : '/register'}
+              className="font-semibold text-indigo-600 hover:text-indigo-700 underline-offset-2 hover:underline"
+            >
+              Sign up
+            </a>
+          </p>
+
         </div>
+      </main>
 
-        <p className="mt-5 text-center text-sm text-slate-500">
-          Don&apos;t have an account?{' '}
-          <a
-            href={locked ? `/register?orgEmail=${encodeURIComponent(orgEmail)}` : '/register'}
-            className="font-semibold text-indigo-600 underline-offset-2 hover:underline"
-          >
-            Sign up
-          </a>
-        </p>
+      {/* ------------ Bottom Footer Strip ------------ */}
+      <footer className="px-6 py-6 text-center text-xs text-slate-400">
+        © {new Date().getFullYear()} PulseOps, Inc. All rights reserved.
+      </footer>
 
-        <p className="mt-3 text-center text-xs text-slate-400">
-          By continuing you agree to the PulseOps terms of service.
-        </p>
-      </div>
     </div>
   );
 }
 
 function LoginFallback() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50 text-sm text-slate-400">
-      <div className="h-10 w-10 animate-spin rounded-full border-4 border-indigo-200 border-t-indigo-500" />
+    <div className="flex min-h-screen items-center justify-center bg-[#FAFAFC] text-sm text-slate-400">
+      <div className="h-8 w-8 animate-spin rounded-full border-2 border-indigo-200 border-t-indigo-600" />
     </div>
   );
 }
@@ -522,4 +483,3 @@ export default function LoginPage() {
     </Suspense>
   );
 }
-
