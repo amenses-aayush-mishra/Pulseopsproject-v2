@@ -2,8 +2,8 @@ import { getServerSession } from 'next-auth';
 import { redirect } from 'next/navigation';
 import { authOptions } from '../../../lib/authOptions';
 import { ThemeProvider } from '../../providers/ThemeProvider';
-import Link from 'next/link';
-import { Settings, Puzzle, UserCircle, Search, Menu, MessagesSquare, LayoutDashboard, GitBranch, ListTodo } from 'lucide-react';
+import WorkspaceSidebar from '../../_components/WorkspaceSidebar';
+import { Settings, Puzzle, UserCircle, Search, Menu, MessagesSquare, LayoutDashboard, GitBranch, ListTodo, Ticket, Key } from 'lucide-react';
 
 export default async function WorkspaceLayout({ children, params }) {
   const workspaceId = params?.workspaceId;
@@ -28,46 +28,9 @@ export default async function WorkspaceLayout({ children, params }) {
     <ThemeProvider>
       <div className="flex min-h-screen bg-[var(--sidebar-bg,var(--tw-colors-slate-50))]">
         
-        {/* Sidebar */}
-        <aside className="w-64 flex-shrink-0 border-r border-slate-200 bg-white/50 backdrop-blur-sm transition-all hidden md:block">
-          <div className="flex h-16 items-center px-6 border-b border-slate-200">
-            <span className="text-xl font-bold bg-gradient-to-r from-indigo-500 to-purple-500 bg-clip-text text-transparent">PulseOps</span>
-          </div>
-          
-          <div className="p-4 space-y-1">
-            <div className="mb-4 px-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Workspace</div>
-            
-            <Link href={`/workspace/${workspaceId}`} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-indigo-600 transition-colors">
-              <LayoutDashboard className="h-4 w-4" /> Dashboard
-            </Link>
-            <Link href={`/workspace/${workspaceId}/repositories`} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-indigo-600 transition-colors">
-              <GitBranch className="h-4 w-4" /> Repositories
-            </Link>
-            <Link href={`/workspace/${workspaceId}/communication`} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-indigo-600 transition-colors">
-              <MessagesSquare className="h-4 w-4" /> Communication
-            </Link>
-            <Link href={`/workspace/${workspaceId}/tasks`} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-indigo-600 transition-colors">
-              <ListTodo className="h-4 w-4" /> Tasks
-            </Link>
-            
-            <div className="mt-8 mb-4 px-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Administration</div>
-            
-            {isAdmin && (
-              <>
-                <Link href={`/workspace/${workspaceId}/invitations`} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-indigo-600 transition-colors">
-                  <UserCircle className="h-4 w-4" /> Team & Invites
-                </Link>
-                <Link href={`/workspace/${workspaceId}/settings`} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-indigo-600 transition-colors">
-                  <Settings className="h-4 w-4" /> Settings
-                </Link>
-                <Link href={`/workspace/${workspaceId}/integrations`} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-indigo-600 transition-colors">
-                  <Puzzle className="h-4 w-4" /> Integrations
-                </Link>
-              </>
-            )}
-          </div>
-        </aside>
-
+        {/* Sidebar - Use the dedicated WorkspaceSidebar component */}
+        <WorkspaceSidebar workspaceId={workspaceId} role={role} />
+        
         {/* Main Content Area */}
         <div className="flex-1 flex flex-col min-w-0 bg-slate-50">
           {/* Top Header */}

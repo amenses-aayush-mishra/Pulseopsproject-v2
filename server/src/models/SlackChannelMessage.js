@@ -1,4 +1,3 @@
-'use strict';
 const mongoose = require('mongoose');
 const { Schema } = mongoose;
 
@@ -16,40 +15,43 @@ const { Schema } = mongoose;
  *
  * Deduplication: Slack may redeliver the same event more than once, and a
  * channel message or thread reply has a unique `ts`. The unique index on
- * { organizationId, channelId, messageTs } guarantees repeated deliveries /
+ * { organizationId, channelId, messageId } guarantees repeated deliveries /
  * re-fetches never create duplicate records.
  */
-const slackChannelMessageSchema = new Schema(
-  {
-    organizationId: { type: Schema.Types.ObjectId, ref: 'Organization', required: true },
-    slackTeamId: { type: String, default: null },
-    channelId: { type: String, required: true },
-    // Slack's message identifier: a float string like "1620000000.000100".
-    messageTs: { type: String, required: true },
-    userId: { type: String, default: null },
-    userName: { type: String, default: null },
-    userAvatar: { type: String, default: null },
-    text: { type: String, default: '' },
-    // Set on thread replies (equals the parent message's ts, different from messageTs).
-    threadTs: { type: String, default: null },
-    isReply: { type: Boolean, default: false },
-    replyCount: { type: Number, default: 0 },
-    reactions: { type: Schema.Types.Mixed, default: [] },
-    attachments: { type: Schema.Types.Mixed, default: [] },
-    files: { type: Schema.Types.Mixed, default: [] },
-    // Slack event_id from the Events API — stored for traceability/audit.
-    eventId: { type: String, default: null },
-    bot: { type: Boolean, default: false },
-  },
-  { timestamps: true }
-);
+const slackChannelMessageSchema = new Schema({
+  organizationId: { type: Schema.Types.ObjectId, ref: 'Organization', required: true },
+  slackTeamId: { type: String, default: null },
+  channelId: { type: String, required: true },
+  messageId: { type: String, required: true },        // from feature (Slack ts)
+  messageTs: { type: String, required: true },        // from main (alias for messageId)
+  userId: { type: String, default: null },            // from main
+  slackUserId: { type: String, default: null },       // from feature (more explicit)
+  userName: { type: String, default: null },
+  userAvatar: { type: String, default: null },
+  text: { type: String, default: '' },
+  threadTs: { type: String, default: null, index: true },
+  parentMessageId: { type: String, default: null },   // from feature
+  isReply: { type: Boolean, default: false },         // from main
+  subtype: { type: String, default: null },           // from feature
+  messageType: { type: String, enum: ['message', 'file', 'system', 'bot'], default: 'message' }, // from feature
+  mentions: { type: [String], default: [] },          // from feature
+  reactions: { type: Schema.Types.Mixed, default: [] }, // from main (array format)
+  replyCount: { type: Number, default: 0 },
+  threadLatestReply: { type: String, default: null }, // from feature
+  rawPayload: { type: Schema.Types.Mixed, default: null }, // from feature (AI-ready)
+  syncSource: { type: String, enum: ['history', 'realtime'], default: 'history' }, // from feature
+  attachments: { type: Schema.Types.Mixed, default: [] },
+  files: { type: Schema.Types.Mixed, default: [] },
+  eventId: { type: String, default: null },           // from main
+  bot: { type: Boolean, default: false },
+  deletedAt: { type: Date, default: null },           // from feature
+  editedAt: { type: Date, default: null },            // from feature
+}, { timestamps: true });
 
-// Dedup key — prevents duplicate records from re-delivered events / re-fetches.
-slackChannelMessageSchema.index(
-  { organizationId: 1, channelId: 1, messageTs: 1 },
-  { unique: true }
-);
-// Efficient thread lookups (top-level messages of a thread + replies to it).
+// Indexes - combine both
+slackChannelMessageSchema.index({ organizationId: 1, channelId: 1, messageId: 1 }, { unique: true });
+slackChannelMessageSchema.index({ organizationId: 1, channelId: 1, messageTs: 1 }, { unique: true }); // main's dedup key
 slackChannelMessageSchema.index({ organizationId: 1, channelId: 1, threadTs: 1 });
+slackChannelMessageSchema.index({ organizationId: 1, channelId: 1, deletedAt: 1 });
 
 module.exports = mongoose.model('SlackChannelMessage', slackChannelMessageSchema);

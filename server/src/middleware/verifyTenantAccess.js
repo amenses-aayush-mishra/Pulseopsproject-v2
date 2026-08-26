@@ -1,8 +1,19 @@
 const OrganizationMember = require('../models/OrganizationMember');
 
+/**
+ * Tenant-scoping guard. Derives the target organization from (in priority
+ * order): the `organizationId` route param, the `/api/workspace/:workspaceId/*`
+ * route param alias, the `x-organization-id` header, or the JWT's active
+ * organization. Verifies an ACTIVE membership before tagging `req.organizationId`.
+ *
+ * Never trusts workspace/org ids sent from the browser for the authorization
+ * decision — the authenticated user must hold an active membership in the
+ * resolved organization.
+ */
 const verifyTenantAccess = async (req, res, next) => {
   const targetOrgId =
     (req.params && req.params.organizationId) ||
+    (req.params && req.params.workspaceId) ||
     req.headers['x-organization-id'] ||
     (req.user && req.user.activeOrganizationId) ||
     null;

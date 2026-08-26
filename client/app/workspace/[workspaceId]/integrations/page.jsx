@@ -368,6 +368,7 @@ function SlackPanel({ workspaceId, token }) {
   const [connectError, setConnectError] = useState('');
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState(null); // { ok: boolean, message: string }
+<<<<<<< HEAD
   const [disabling, setDisabling] = useState(false);
   const [disableError, setDisableError] = useState(null); // string when present
    console.log('[SlackPanel] RENDER', {
@@ -376,58 +377,86 @@ function SlackPanel({ workspaceId, token }) {
   statusLoading,
   isConnected,
 });
+=======
+  const [status, setStatus] = useState(null); // full status payload (scopes, counts, errors)
+  const [conversations, setConversations] = useState([]);
+  const [convLoading, setConvLoading] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [retryingId, setRetryingId] = useState(null);
+  const [syncResult, setSyncResult] = useState(null);
 
-  
+  const headers = { Authorization: `Bearer ${token}`, 'x-organization-id': workspaceId };
+>>>>>>> feature/ai-summary-jira-backup
+
   const loadStatus = async () => {
+    if (!token) return;
     setStatusLoading(true);
-    console.log('[SlackPanel] loadStatus START');
     try {
-      const res = await fetch(`${API_BASE}/api/integrations/slack/status`, {
-        headers: { Authorization: `Bearer ${token}`, 'x-organization-id': workspaceId },
-      });
-      console.log('[SlackPanel] status response', res.status);
+      const res = await fetch(`${API_BASE}/api/integrations/slack/status`, { headers });
       if (res.ok) {
         const data = await res.json();
         setIsConnected(Boolean(data.connected));
         setTeamName(data.teamName || '');
         setChannelName(data.channelName || '');
+        setStatus(data);
       }
     } catch {
       // Ignore network errors for status check, mirrors GitHubPanel's loadStatus
-      console.error('[SlackPanel] status error', error);
     } finally {
-      console.log('[SlackPanel] loadStatus FINALLY → false');
       setStatusLoading(false);
     }
   };
- 
+
+  const loadConversations = async () => {
+    if (!token) return null;
+    setConvLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/workspace/${workspaceId}/slack/conversations`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        const all = [
+          ...(data.publicChannels || []),
+          ...(data.privateChannels || []),
+          ...(data.groupDMs || []),
+          ...(data.directMessages || []),
+        ];
+        setConversations(all);
+        return all;
+      }
+    } catch {
+      // keep existing list
+    } finally {
+      setConvLoading(false);
+    }
+    return null;
+  };
+
   useEffect(() => {
-    console.log('[SlackPanel] EFFECT RUN');
-    if (!token){
-      console.log('[SlackPanel] NO TOKEN');
+    if (!token) {
       setStatusLoading(false);
-      
-      return};
-      
-    
+      return;
+    }
     const params = new URLSearchParams(window.location.search);
     if (params.get('connected') === 'slack') {
       window.history.replaceState({}, '', window.location.pathname);
     }
     loadStatus();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    return () => {
-    console.log('[SlackPanel] UNMOUNT / EFFECT CLEANUP');
-  };
   }, [token]);
- 
+
+  // When connected (or after a sync round-trip) load the conversation list.
+  useEffect(() => {
+    if (isConnected && token) {
+      loadConversations();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isConnected, token]);
+
   const handleConnect = async () => {
     setConnecting(true);
     setConnectError('');
     try {
-      const res = await fetch(`${API_BASE}/api/integrations/slack/authorize`, {
-        headers: { Authorization: `Bearer ${token}`, 'x-organization-id': workspaceId },
-      });
+      const res = await fetch(`${API_BASE}/api/integrations/slack/authorize`, { headers });
       const data = await res.json();
       if (data.url) {
         window.location.href = data.url;
@@ -440,14 +469,94 @@ function SlackPanel({ workspaceId, token }) {
       setConnecting(false);
     }
   };
- 
+
+  const handleSync = async () => {
+    setSyncing(true);
+    setSyncResult(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/integrations/slack/sync`, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conversationIds: [] }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setSyncResult({ ok: false, message: data.error || 'Sync could not be started.' });
+        return;
+      }
+      // Poll until no conversation is left in SYNCING (or a few attempts pass).
+      let latest = null;
+      for (let i = 0; i < 15; i += 1) {
+        await new Promise((r) => setTimeout(r, 2500));
+        const [statusData, convData] = await Promise.all([loadStatus(), loadConversations()]);
+        if (convData) latest = convData;
+        const stillSyncing = (latest || []).some((c) => c.syncStatus === 'SYNCING');
+        if (!stillSyncing) break;
+      }
+      const failed = (latest || []).filter((c) => c.syncStatus === 'SYNC_ERROR');
+      const synced = (latest || []).filter((c) => c.syncStatus === 'SYNCED');
+      const errorCodes = {};
+      for (const c of failed) {
+        errorCodes[c.syncErrorCode || 'unknown'] = (errorCodes[c.syncErrorCode || 'unknown'] || 0) + 1;
+      }
+      let message;
+      if (failed.length === 0) {
+        message = `${synced.length} conversation(s) synced.`;
+      } else if (errorCodes.not_in_channel) {
+        message = `Invite the PulseOps bot to ${errorCodes.not_in_channel} private channel(s), then retry sync.`;
+      } else if (errorCodes.missing_scope) {
+        message = 'Slack permissions need updating. Reconnect Slack, then sync again.';
+      } else if (errorCodes.invalid_auth || errorCodes.account_inactive) {
+        message = 'Slack authorization has expired. Reconnect Slack.';
+      } else {
+        message = `${failed.length} conversation(s) require additional Slack access.`;
+      }
+      setSyncResult({ ok: failed.length === 0, message });
+    } catch {
+      setSyncResult({ ok: false, message: 'Sync could not be started. Could not reach server.' });
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const handleRetry = async (conversationId) => {
+    if (retryingId) return;
+    setRetryingId(conversationId);
+    setSyncResult(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/integrations/slack/sync`, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conversationIds: [conversationId] }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setSyncResult({ ok: false, message: data.error || 'Retry could not be started.' });
+        return;
+      }
+      // Poll until this specific conversation leaves SYNCING.
+      for (let i = 0; i < 15; i += 1) {
+        await new Promise((r) => setTimeout(r, 2500));
+        const convData = await loadConversations();
+        const target = (convData || []).find((c) => c.id === conversationId);
+        if (!target || target.syncStatus !== 'SYNCING') break;
+      }
+      await Promise.all([loadStatus(), loadConversations()]);
+      setSyncResult({ ok: true, message: 'Retry finished. Check the conversation status below.' });
+    } catch {
+      setSyncResult({ ok: false, message: 'Retry could not be started. Could not reach server.' });
+    } finally {
+      setRetryingId(null);
+    }
+  };
+
   const handleTestMessage = async () => {
     setTesting(true);
     setTestResult(null);
     try {
       const res = await fetch(`${API_BASE}/api/integrations/slack/test`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'x-organization-id': workspaceId },
+        headers,
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.success) {
@@ -461,6 +570,7 @@ function SlackPanel({ workspaceId, token }) {
       setTesting(false);
     }
   };
+<<<<<<< HEAD
   const handleDisable = async () => {
     setDisabling(true);
     setDisableError(null);
@@ -487,10 +597,53 @@ function SlackPanel({ workspaceId, token }) {
 
 
  
+=======
+
+  const badge = isConnected
+    ? status && status.scopesHealthy === false ? (
+        <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-sm font-medium text-amber-700 ring-1 ring-inset ring-amber-600/20">
+          <Loader2 className="h-3 w-3" /> Scopes outdated
+        </span>
+      ) : (
+        <ConnectedBadge />
+      )
+    : undefined;
+
+  const syncChip = (c) => {
+    if (c.syncStatus === 'SYNCED') return <span className="text-xs font-medium text-emerald-600">✓ {c.messageCount || 0} msgs</span>;
+    if (c.syncStatus === 'SYNCING') return <span className="inline-flex items-center gap-1 text-xs text-amber-600"><Loader2 className="h-3 w-3 animate-spin" /> Syncing…</span>;
+    if (c.syncStatus === 'SYNC_ERROR') {
+      return (
+        <span className="flex items-center gap-2">
+          {retryingId === c.id ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-600" />
+          ) : (
+            <button
+              type="button"
+              onClick={() => handleRetry(c.id)}
+              className="inline-flex items-center rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-600 transition-colors hover:bg-slate-50"
+            >
+              Retry
+            </button>
+          )}
+          <span
+            title={`${c.syncErrorCode ? `[${c.syncErrorCode}] ` : ''}${c.syncError || 'Sync error'}`}
+            className="text-xs text-rose-600"
+          >
+            ⚠ Sync error
+          </span>
+        </span>
+      );
+    }
+    return <span className="text-xs text-slate-400">Not synced</span>;
+  };
+
+>>>>>>> feature/ai-summary-jira-backup
   return (
     <IntegrationCard
       icon={<SlackIcon />}
       title="Slack"
+<<<<<<< HEAD
       description="Connect a Slack channel to receive PulseOps notifications."
       badge={isConnected ? <ConnectedBadge /> : undefined}
       topActions={
@@ -501,6 +654,10 @@ function SlackPanel({ workspaceId, token }) {
           </div>
         ) : undefined
       }
+=======
+      description="Mirror Slack conversations into PulseOps and keep them synchronized in real time."
+      badge={badge}
+>>>>>>> feature/ai-summary-jira-backup
       action={
         statusLoading ? (
           <div className="flex justify-center py-6">
@@ -525,12 +682,102 @@ function SlackPanel({ workspaceId, token }) {
                 <span className="font-medium text-slate-900">Workspace:</span>{' '}
                 {teamName || '—'}
               </p>
-              <p className="mt-1">
-                <span className="font-medium text-slate-900">Channel:</span>{' '}
-                {channelName ? `#${channelName}` : '—'}
-              </p>
+              {status?.authError && (
+                <p className="mt-1 font-medium text-rose-600">
+                  <span className="font-semibold text-slate-900">Authorization:</span>{' '}
+                  {status.authError}
+                </p>
+              )}
             </div>
- 
+
+            {status && status.scopesHealthy === false && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+                <p className="text-sm font-semibold text-amber-800">
+                  Permissions need updating.
+                </p>
+                <p className="mt-0.5 text-xs text-amber-700">
+                  Missing: {status.missingScopes?.join(', ') || 'unknown'}. Reconnect Slack to
+                  grant the required scopes.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleConnect}
+                  disabled={connecting}
+                  className="mt-2 inline-flex items-center gap-2 rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-amber-700 disabled:opacity-60"
+                >
+                  {connecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <SlackIcon />}
+                  Reconnect Slack
+                </button>
+              </div>
+            )}
+
+            <div className="rounded-lg border border-slate-200">
+              <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+                <div>
+                  <h4 className="text-sm font-semibold text-slate-900">
+                    Conversations ({conversations.length})
+                  </h4>
+                  {status?.conversationCount !== undefined && (
+                    <p className="text-xs text-slate-500">
+                      {status.syncedConversationCount} synced · {status.messageCount} messages
+                    </p>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={loadConversations}
+                    disabled={convLoading}
+                    className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-60"
+                  >
+                    {convLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Refresh list'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSync}
+                    disabled={syncing}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-indigo-700 disabled:opacity-60"
+                  >
+                    {syncing && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                    {syncing ? 'Syncing…' : 'Sync Now'}
+                  </button>
+                </div>
+              </div>
+
+              {syncResult && (
+                <div
+                  role={syncResult.ok ? 'status' : 'alert'}
+                  className={`border-b border-slate-100 px-4 py-2.5 text-xs font-medium ${
+                    syncResult.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
+                  }`}
+                >
+                  {syncResult.ok ? '✓ Sync complete. ' : '⚠ Sync partially failed. '}
+                  {syncResult.message}
+                </div>
+              )}
+
+              <div className="max-h-72 divide-y divide-slate-100 overflow-y-auto">
+                {conversations.length === 0 && (
+                  <p className="px-4 py-6 text-center text-sm text-slate-400">
+                    No conversations discovered yet. Click Sync Now after connecting.
+                  </p>
+                )}
+                {conversations.map((c) => (
+                  <div key={c.id} className="flex items-center justify-between gap-3 px-4 py-2.5">
+                    <a
+                      href={`/workspace/${workspaceId}/channels/${c.id}`}
+                      className="min-w-0 truncate text-sm font-medium text-slate-800 hover:text-indigo-600"
+                    >
+                      {c.conversationType === 'PUBLIC_CHANNEL' || c.conversationType === 'PRIVATE_CHANNEL'
+                        ? `# ${c.name || c.id}`
+                        : c.name || c.id}
+                    </a>
+                    {syncChip(c)}
+                  </div>
+                ))}
+              </div>
+            </div>
+
             {testResult && (
               <div
                 role={testResult.ok ? 'status' : 'alert'}
@@ -544,7 +791,7 @@ function SlackPanel({ workspaceId, token }) {
                 {testResult.message}
               </div>
             )}
- 
+
             <button
               onClick={handleTestMessage}
               disabled={testing}
@@ -563,18 +810,221 @@ function SlackPanel({ workspaceId, token }) {
 // ─── Jira Integration Panel ───────────────────────────────────────────────────
 
 function JiraPanel({ workspaceId, token }) {
+<<<<<<< HEAD
   const webhookUrl = `${API_BASE}/api/webhooks/jira`;
   const [copied, setCopied] = useState(false);
   const [disabling, setDisabling] = useState(false);
   const [disableMsg, setDisableMsg] = useState(null); // { ok: boolean, message: string }
+=======
+  const [statusLoading, setStatusLoading] = useState(true);
+  const [isConnected, setIsConnected] = useState(false);
+  const [siteUrl, setSiteUrl] = useState('');
+  const [cloudId, setCloudId] = useState('');
+  const [lastSyncAt, setLastSyncAt] = useState(null);
+  const [webhookRegistered, setWebhookRegistered] = useState(false);
+  const [connecting, setConnecting] = useState(false);
+  const [connectError, setConnectError] = useState('');
+  
+  // Projects
+  const [projects, setProjects] = useState([]);
+  const [projectsLoading, setProjectsLoading] = useState(false);
+  const [selectedProjectKey, setSelectedProjectKey] = useState('');
+  const [projectsError, setProjectsError] = useState('');
+  
+  // Sync
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState(null); // { ok: boolean, message: string, synced: number }
+  
+  // Webhook
+  const [webhookRegistering, setWebhookRegistering] = useState(false);
+  const [webhookResult, setWebhookResult] = useState(null);
+  const [webhookVerified, setWebhookVerified] = useState(false);
+  
+  // Issues preview
+  const [issues, setIssues] = useState([]);
+  const [issuesLoading, setIssuesLoading] = useState(false);
+>>>>>>> feature/ai-summary-jira-backup
 
-  const copy = () => {
+  const headers = { Authorization: `Bearer ${token}`, 'x-organization-id': workspaceId };
+  // Public webhook URL. Backend-provided (status/register-webhook) value is
+  // authoritative. Fall back to a configured PUBLIC backend URL — never
+  // localhost — because Jira Cloud cannot deliver to localhost.
+  const [webhookUrl, setWebhookUrl] = useState(
+    process.env.NEXT_PUBLIC_BACKEND_URL
+      ? `${process.env.NEXT_PUBLIC_BACKEND_URL.replace(/\/$/, '')}/api/webhooks/jira`
+      : ''
+  );
+
+  const loadStatus = async () => {
+    if (!token) return;
+    setStatusLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/integrations/jira/status`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        setIsConnected(Boolean(data.connected));
+        setSiteUrl(data.siteUrl || '');
+        setCloudId(data.cloudId || '');
+        setLastSyncAt(data.lastSyncAt || null);
+        setWebhookRegistered(Boolean(data.webhookRegistered));
+        if (data.webhookUrl) setWebhookUrl(data.webhookUrl);
+      }
+    } catch {
+      // Ignore network errors for status check
+    } finally {
+      setStatusLoading(false);
+    }
+  };
+
+  const loadProjects = async () => {
+    if (!token || !isConnected) return;
+    setProjectsLoading(true);
+    setProjectsError('');
+    try {
+      const res = await fetch(`${API_BASE}/api/integrations/jira/projects`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        setProjects(data);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setProjectsError(data.error || 'Failed to load projects.');
+      }
+    } catch {
+      setProjectsError('Could not reach the server.');
+    } finally {
+      setProjectsLoading(false);
+    }
+  };
+
+  const loadIssues = async (projectKey) => {
+    if (!token || !projectKey) return;
+    setIssuesLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/integrations/jira/issues?projectKey=${encodeURIComponent(projectKey)}&limit=10`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        setIssues(data.issues || []);
+      }
+    } catch {
+      // Ignore
+    } finally {
+      setIssuesLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!token) {
+      setStatusLoading(false);
+      return;
+    }
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('connected') === 'jira') {
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+    loadStatus();
+  }, [token]);
+
+  useEffect(() => {
+    if (isConnected) {
+      loadProjects();
+    }
+  }, [isConnected]);
+
+  useEffect(() => {
+    if (selectedProjectKey) {
+      loadIssues(selectedProjectKey);
+    }
+  }, [selectedProjectKey]);
+
+  useEffect(() => {
+    let intervalId;
+    if (status?.syncStates?.some(s => s.status === 'syncing')) {
+      intervalId = setInterval(() => {
+        loadStatus();
+        if (selectedProjectKey) loadIssues(selectedProjectKey);
+      }, 3000);
+    }
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [status, selectedProjectKey]);
+
+  const handleConnect = async () => {
+    setConnecting(true);
+    setConnectError('');
+    try {
+      const res = await fetch(`${API_BASE}/api/integrations/jira/auth`, { headers });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        setConnectError(data.error || 'Could not initiate Jira connection.');
+        setConnecting(false);
+      }
+    } catch {
+      setConnectError('Could not reach the server.');
+      setConnecting(false);
+    }
+  };
+
+  const handleSync = async () => {
+    if (!selectedProjectKey) return;
+    setSyncing(true);
+    setSyncResult(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/integrations/jira/sync`, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectKey: selectedProjectKey }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        setSyncResult({ ok: true, message: `Synced ${data.synced} issues from ${data.projectKey}.`, synced: data.synced });
+        loadStatus(); // Refresh lastSyncAt
+        loadIssues(selectedProjectKey);
+      } else {
+        setSyncResult({ ok: false, message: data.error || 'Sync failed.' });
+      }
+    } catch {
+      setSyncResult({ ok: false, message: 'Could not reach the server.' });
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const handleRegisterWebhook = async () => {
+    if (!selectedProjectKey) return;
+    setWebhookRegistering(true);
+    setWebhookResult(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/integrations/jira/register-webhook`, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectKey: selectedProjectKey }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        setWebhookResult({ ok: true, message: data.message || 'Webhook registered successfully.', webhookId: data.webhookId });
+        setWebhookVerified(data.verified === true);
+        if (data.webhookUrl) setWebhookUrl(data.webhookUrl);
+        loadStatus(); // Refresh webhook status
+      } else {
+        setWebhookResult({ ok: false, message: data.error || 'Webhook registration failed.' });
+      }
+    } catch {
+      setWebhookResult({ ok: false, message: 'Could not reach the server.' });
+    } finally {
+      setWebhookRegistering(false);
+    }
+  };
+
+  const copyWebhookUrl = () => {
     navigator.clipboard.writeText(webhookUrl).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      // Could add toast notification here
     });
   };
 
+<<<<<<< HEAD
   const handleDisable = async () => {
     setDisabling(true);
     setDisableMsg(null);
@@ -630,26 +1080,242 @@ function JiraPanel({ workspaceId, token }) {
           />
         </div>
       }
+=======
+  const formatDate = (dateStr) => {
+    if (!dateStr) return '—';
+    try {
+      return new Date(dateStr).toLocaleString();
+    } catch {
+      return dateStr;
+    }
+  };
+
+  const badge = isConnected
+    ? (
+      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-sm font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
+        <Check className="h-3 w-3" /> Connected
+      </span>
+    )
+    : undefined;
+
+  return (
+    <IntegrationCard
+      icon={<JiraIcon />}
+      title="Jira Cloud"
+      description="Sync Jira issues, track project progress, and receive real-time updates via webhooks."
+      badge={badge}
+>>>>>>> feature/ai-summary-jira-backup
       action={
-        <div className="space-y-3">
-          <p className="text-sm text-slate-600">
-            In your Jira project, go to <strong>Project Settings → Webhooks</strong> and add the URL below. Select the <em>Issue Created</em> and <em>Issue Updated</em> event types.
-          </p>
-          <div className="flex items-center gap-2">
-            <code className="flex-1 truncate rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-700 font-mono">
-              {webhookUrl}
-            </code>
-            <button
-              onClick={copy}
-              className="shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50"
-            >
-              {copied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
-              {copied ? 'Copied' : 'Copy'}
-            </button>
-          </div>
-          <p className="text-xs text-slate-500">
-            Supported events: <code className="rounded bg-slate-100 px-1 py-0.5">jira:issue_created</code>, <code className="rounded bg-slate-100 px-1 py-0.5">jira:issue_updated</code>.
-          </p>
+        <div className="space-y-6">
+          {/* Connection Status / Connect Button */}
+          {statusLoading ? (
+            <div className="flex justify-center py-6">
+              <Loader2 className="h-6 w-6 animate-spin text-slate-300" />
+            </div>
+          ) : !isConnected ? (
+            <div className="space-y-3">
+              {connectError && <p className="text-sm text-rose-600">{connectError}</p>}
+              <button
+                onClick={handleConnect}
+                disabled={connecting}
+                className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-slate-700 disabled:opacity-60"
+              >
+                {connecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <JiraIcon />}
+                Connect Jira Cloud
+              </button>
+              <p className="text-xs text-slate-500">
+                You&apos;ll be redirected to Atlassian to authorize PulseOps. Required scopes: read:jira-work, read:jira-user, manage:jira-webhook.
+              </p>
+            </div>
+          ) : (
+            <>
+              {/* Connected Info */}
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium text-slate-900">Site:</span>
+                  <span className="truncate max-w-xs font-mono text-xs bg-white px-2 py-1 rounded border">{siteUrl}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="font-medium text-slate-900">Cloud ID:</span>
+                  <span className="truncate max-w-xs font-mono text-xs bg-white px-2 py-1 rounded border">{cloudId}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="font-medium text-slate-900">Last Sync:</span>
+                  <span>{formatDate(lastSyncAt)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="font-medium text-slate-900">Webhook:</span>
+                  <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${webhookRegistered ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
+                    {webhookRegistered ? 'Registered' : 'Not Registered'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Projects Selection */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-semibold text-slate-900">Select Project to Sync</h4>
+                  <button
+                    onClick={loadProjects}
+                    disabled={projectsLoading}
+                    className="text-xs text-indigo-600 hover:underline disabled:opacity-50"
+                  >
+                    {projectsLoading ? 'Loading...' : 'Refresh'}
+                  </button>
+                </div>
+                {projectsError && <p className="text-sm text-rose-600">{projectsError}</p>}
+                {projectsLoading ? (
+                  <div className="flex justify-center py-4">
+                    <Loader2 className="h-6 w-6 animate-spin text-slate-300" />
+                  </div>
+                ) : projects.length === 0 ? (
+                  <p className="text-sm text-slate-500">No projects found or Jira not connected.</p>
+                ) : (
+                  <select
+                    value={selectedProjectKey}
+                    onChange={(e) => setSelectedProjectKey(e.target.value)}
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200"
+                  >
+                    <option value="">— Choose a project —</option>
+                    {projects.map((p) => (
+                      <option key={p.key} value={p.key}>
+                        {p.key} — {p.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              {/* Sync Section */}
+              {selectedProjectKey && (
+                <div className="space-y-3 rounded-lg border border-slate-200 p-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-semibold text-slate-900">Sync Issues</h4>
+                    {status?.syncStates?.find(s => s.projectKey === selectedProjectKey)?.status === 'syncing' && (
+                      <span className="inline-flex items-center gap-1 text-xs text-amber-600 font-medium">
+                        <Loader2 className="h-3 w-3 animate-spin" /> Syncing in background...
+                      </span>
+                    )}
+                  </div>
+                  {status?.syncStates?.find(s => s.projectKey === selectedProjectKey) && (
+                    <div className="text-xs text-slate-500 mb-2">
+                      Synced {status.syncStates.find(s => s.projectKey === selectedProjectKey).issuesSynced} issues.
+                      Status: <span className="font-medium text-slate-700 capitalize">{status.syncStates.find(s => s.projectKey === selectedProjectKey).status}</span>
+                    </div>
+                  )}
+                  {syncResult && (
+                    <div
+                      role={syncResult.ok ? 'status' : 'alert'}
+                      className={`rounded-lg border px-4 py-2.5 text-xs font-medium ${syncResult.ok ? 'border-emerald-100 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-700'}`}
+                    >
+                      {syncResult.ok ? '✓ ' : '⚠ '}{syncResult.message}
+                    </div>
+                  )}
+                  <button
+                    onClick={handleSync}
+                    disabled={syncing || !selectedProjectKey || status?.syncStates?.find(s => s.projectKey === selectedProjectKey)?.status === 'syncing'}
+                    className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700 disabled:opacity-60"
+                  >
+                    {(syncing || status?.syncStates?.find(s => s.projectKey === selectedProjectKey)?.status === 'syncing') ? <Loader2 className="h-4 w-4 animate-spin" /> : <Loader2 className="h-4 w-4" />}
+                    {(syncing || status?.syncStates?.find(s => s.projectKey === selectedProjectKey)?.status === 'syncing') ? 'Syncing…' : 'Start Full Sync'}
+                  </button>
+                </div>
+              )}
+
+              {/* Webhook Registration */}
+              {selectedProjectKey && (
+                <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                  <h4 className="text-sm font-semibold text-slate-900">Webhook Registration</h4>
+                  <p className="text-xs text-slate-500">
+                    Register a webhook in Jira to receive real-time updates when issues are created, updated, or deleted.
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 truncate rounded-lg bg-white px-3 py-2 text-xs text-slate-700 font-mono border border-slate-200">
+                      {webhookUrl}
+                    </code>
+                    <button
+                      onClick={copyWebhookUrl}
+                      className="shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                      title="Copy webhook URL"
+                    >
+                      <Copy className="h-3.5 w-3.5" /> Copy
+                    </button>
+                  </div>
+                  {webhookResult && (
+                    <div
+                      role={webhookResult.ok ? 'status' : 'alert'}
+                      className={`rounded-lg border px-4 py-2.5 text-xs font-medium ${webhookResult.ok ? 'border-emerald-100 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-700'}`}
+                    >
+                      {webhookResult.ok ? '✓ ' : '⚠ '}{webhookResult.message}
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={handleRegisterWebhook}
+                      disabled={webhookRegistering || !selectedProjectKey || webhookRegistered}
+                      className="inline-flex items-center gap-2 rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-amber-700 disabled:opacity-60"
+                    >
+                      {webhookRegistering ? <Loader2 className="h-4 w-4 animate-spin" /> : <Loader2 className="h-4 w-4" />}
+                      {webhookRegistering ? 'Registering…' : webhookRegistered ? 'Webhook Active' : 'Register Webhook'}
+                    </button>
+                    {webhookVerified && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                        <Check className="h-3 w-3" /> Verified
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-500">
+                    Supported events: <code className="rounded bg-slate-100 px-1 py-0.5">jira:issue_created</code>, <code className="rounded bg-slate-100 px-1 py-0.5">jira:issue_updated</code>, <code className="rounded bg-slate-100 px-1 py-0.5">jira:issue_deleted</code>.
+                  </p>
+                </div>
+              )}
+
+              {/* Recent Issues Preview */}
+              {selectedProjectKey && issues.length > 0 && (
+                <div className="space-y-3">
+                  <h4 className="text-sm font-semibold text-slate-900">Recent Issues (last 10)</h4>
+                  <div className="rounded-lg border border-slate-200 overflow-hidden">
+                    {issuesLoading ? (
+                      <div className="flex justify-center py-6">
+                        <Loader2 className="h-6 w-6 animate-spin text-slate-300" />
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-slate-100 max-h-60 overflow-y-auto">
+                        {issues.slice(0, 10).map((issue) => (
+                          <div key={issue.jiraIssueId} className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-slate-50">
+                            <div className="min-w-0 flex-1">
+                              <a
+                                href={`${siteUrl}/browse/${issue.issueKey}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sm font-medium text-slate-800 hover:text-indigo-600 truncate block"
+                              >
+                                {issue.issueKey}: {issue.summary}
+                              </a>
+                              <div className="flex items-center gap-2 mt-1 text-xs text-slate-500">
+                                <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-slate-100 text-slate-600 capitalize">
+                                  {issue.status}
+                                </span>
+                                <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-indigo-50 text-indigo-700">
+                                  {issue.issueType}
+                                </span>
+                                {issue.assignee && (
+                                  <span className="truncate max-w-xs">👤 {issue.assignee.displayName}</span>
+                                )}
+                              </div>
+                            </div>
+                            <span className="shrink-0 text-xs text-slate-400">
+                              {formatDate(issue.updated)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
         </div>
       }
     />

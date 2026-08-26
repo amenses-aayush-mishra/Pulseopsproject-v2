@@ -8,3 +8,8 @@ server/.env
 client/.env.local
 .DS_Store
 npm-debug.log*
+
+server/uploads/
+debug.log
+nul
+server.log
