@@ -422,7 +422,7 @@ function LoginInner() {
                   </div>
                 )}
                 <p className="text-xs sm:text-sm text-slate-500 leading-relaxed">
-                  Continue with Google or GitHub. Your workspace invitation is linked automatically.
+                  Continue with Google or GitHub.
                 </p>
                 <button
                   type="button"
@@ -430,7 +430,7 @@ function LoginInner() {
                   disabled={busy || Boolean(oauthProviders && !oauthProviders.google)}
                   className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 px-4 py-2.5 text-xs sm:text-sm font-semibold text-slate-700 transition-colors disabled:opacity-60"
                 >
-                  <span aria-hidden="true" className="font-bold">G</span> Google
+                  Google
                 </button>
                 <button
                   type="button"
@@ -438,7 +438,7 @@ function LoginInner() {
                   disabled={busy || Boolean(oauthProviders && !oauthProviders.github)}
                   className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 px-4 py-2.5 text-xs sm:text-sm font-semibold text-slate-700 transition-colors disabled:opacity-60"
                 >
-                  <span aria-hidden="true" className="font-bold">GH</span> GitHub
+                  GitHub
                 </button>
               </div>
             )}

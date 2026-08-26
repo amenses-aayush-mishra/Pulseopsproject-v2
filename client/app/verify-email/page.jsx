@@ -3,22 +3,13 @@
 import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { signIn } from 'next-auth/react';
+import Link from 'next/link';
+import AuthShell from '../_components/AuthShell';
 
-// Email-OTP verification page. Reached from /register (redirect with
-// ?email=...) or via the "resend verification code" link on /login. The
-// 6-digit code is entered here — never carried in the URL.
 const API_BASE = process.env.NEXT_PUBLIC_EXPRESS_API_URL || 'http://localhost:5000';
 const VERIFY_ENDPOINT = `${API_BASE}/api/auth/verify-email`;
 const RESEND_ENDPOINT = `${API_BASE}/api/auth/resend-otp`;
 
-const GRID_BG = {
-  backgroundImage:
-    'linear-gradient(to right, rgba(99,102,241,0.07) 1px, transparent 1px), linear-gradient(to bottom, rgba(99,102,241,0.07) 1px, transparent 1px)',
-  backgroundSize: '44px 44px',
-};
-
-// TASK-112 pattern — strip control characters, cap length before values reach
-// form state, banners, or API payloads.
 const sanitizeParam = (value, { maxLength = 255 } = {}) => {
   let out = String(value == null ? '' : value)
     .replace(/[\u0000-\u001F\u007F]/g, '')
@@ -26,13 +17,18 @@ const sanitizeParam = (value, { maxLength = 255 } = {}) => {
   return out.slice(0, maxLength);
 };
 
+const FLOAT_INPUT =
+  'peer w-full rounded-xl border border-slate-300/80 bg-white px-3.5 pb-2.5 pt-5 text-center text-xl font-bold tracking-[0.4em] text-slate-900 outline-none transition-all focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100';
+const FLOAT_LABEL =
+  'pointer-events-none absolute left-3.5 top-1.5 text-[11px] font-bold uppercase tracking-wide text-indigo-600 transition-all peer-placeholder-shown:top-3.5 peer-placeholder-shown:text-sm peer-placeholder-shown:font-normal peer-placeholder-shown:normal-case peer-placeholder-shown:tracking-normal peer-placeholder-shown:text-slate-400 peer-focus:top-1.5 peer-focus:text-[11px] peer-focus:font-bold peer-focus:uppercase peer-focus:tracking-wide peer-focus:text-indigo-600';
+
 function Banner({ kind, children }) {
   return (
     <div
       role={kind === 'success' ? 'status' : 'alert'}
-      className={`rounded-xl border px-3 py-2.5 text-sm ${
+      className={`rounded-xl border px-3.5 py-3 text-xs sm:text-sm ${
         kind === 'success'
-          ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+          ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
           : 'border-rose-200 bg-rose-50 text-rose-800'
       }`}
     >
@@ -60,7 +56,7 @@ function VerifyEmailInner() {
 
     const trimmedOtp = otp.trim();
     if (!/^\d{6}$/.test(trimmedOtp)) {
-      setError({ message: 'Enter the 6-digit code from your email.' });
+      setError({ message: 'Enter the 6-digit code sent to your email.' });
       return;
     }
     if (!email) {
@@ -83,9 +79,6 @@ function VerifyEmailInner() {
       setVerified(true);
       setMessage(data?.message || 'Email verified successfully.');
 
-      // Establish the authenticated session now (the verify-email response carries a
-      // freshly minted standard auth token) and go straight to /onboarding —
-      // the user never sees the sign-in page and never re-enters their password.
       try {
         const signInRes = await signIn('credentials', {
           redirect: false,
@@ -98,25 +91,22 @@ function VerifyEmailInner() {
           });
           return;
         }
-        // Persist the session access token for API calls outside NextAuth.
         const sessionRes = await fetch('/api/auth/session');
         const sessionData = await sessionRes.json().catch(() => ({}));
         if (sessionData?.accessToken) {
           try {
             localStorage.setItem('pulseops_token', sessionData.accessToken);
-          } catch (storageErr) {
-            // storage disabled — onboarding is still gated by the NextAuth session.
-          }
+          } catch {}
         }
         router.replace('/onboarding');
         return;
-      } catch (autoSignInErr) {
+      } catch {
         setError({
           message: 'Email verified, but automatic sign-in failed. Please sign in to continue.',
         });
         return;
       }
-    } catch (err) {
+    } catch {
       setError({ message: 'Could not reach the verification service. Please try again.' });
     } finally {
       setBusy(false);
@@ -145,7 +135,7 @@ function VerifyEmailInner() {
         return;
       }
       setMessage(data?.message || 'A new verification code has been sent to your email.');
-    } catch (err) {
+    } catch {
       setError({ message: 'Could not reach the verification service. Please try again.' });
     } finally {
       setBusy(false);
@@ -153,116 +143,91 @@ function VerifyEmailInner() {
   };
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-slate-50 p-6 text-slate-900">
-      <div aria-hidden="true" className="absolute inset-0" style={GRID_BG} />
-      <div
-        aria-hidden="true"
-        className="absolute -top-32 -left-24 h-96 w-96 rounded-full bg-indigo-300/40 blur-3xl"
-      />
-      <div
-        aria-hidden="true"
-        className="absolute -bottom-32 -right-24 h-96 w-96 rounded-full bg-violet-300/40 blur-3xl"
-      />
+    <AuthShell
+      eyebrow="EMAIL VERIFICATION"
+      title="Verify your email."
+      subtitle={
+        verified
+          ? 'Your account is now verified.'
+          : email
+          ? `We sent a 6-digit verification code to ${email}.`
+          : 'Enter the 6-digit code sent to your email to verify your account.'
+      }
+      footerLink={
+        <Link href="/login" className="font-semibold text-indigo-600 hover:text-indigo-700 underline-offset-2 hover:underline">
+          Back to sign in
+        </Link>
+      }
+    >
+      {verified ? (
+        <div className="space-y-4">
+          <Banner kind="success">✓ {message}</Banner>
+          {error && <Banner kind="error">{error.message}</Banner>}
+          <p className="text-xs sm:text-sm text-slate-500 text-center">
+            Your email is verified. Continue to set up your workspace.
+          </p>
+          <a
+            href="/login?verified=true"
+            className="w-full rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-sm py-3 px-4 flex items-center justify-center transition-all shadow-sm"
+          >
+            Continue to sign in
+          </a>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {error && <Banner kind="error">{error.message}</Banner>}
+          {message && !error && <Banner kind="success">{message}</Banner>}
 
-      <div className="relative w-full max-w-md rounded-3xl border border-white/60 bg-white/70 p-8 text-center shadow-xl shadow-indigo-500/10 backdrop-blur-xl">
-        <h1 className="bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-600 bg-clip-text text-2xl font-bold tracking-tight text-transparent">
-          Verify your email
-        </h1>
-
-        {verified ? (
-          <div className="mt-6 space-y-4">
-            <Banner kind="success">✓ {message}</Banner>
-            {error && <Banner kind="error">{error.message}</Banner>}
-            <p className="text-sm text-slate-500">
-              Your email is verified. Continue to your workspace setup.
-            </p>
-            <a
-              href="/login?verified=true"
-              className="inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 transition-opacity hover:opacity-90"
-            >
-              Continue to sign in
-            </a>
-          </div>
-        ) : (
-          <div className="mt-6 space-y-4">
-            <p className="text-sm text-slate-500">
-              We sent a 6-digit verification code to{' '}
-              <span className="font-semibold text-slate-700">{email || 'your email'}</span>.
-              Enter it below to verify your account.
-            </p>
-
-            {error && <Banner kind="error">{error.message}</Banner>}
-            {message && !error && <Banner kind="success">{message}</Banner>}
-
-            <form onSubmit={onSubmit} className="space-y-4" noValidate>
-              <div className="relative">
-                <input
-                  id="verify-otp"
-                  type="text"
-                  name="otp"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  maxLength={6}
-                  autoComplete="one-time-code"
-                  value={otp}
-                  placeholder=" "
-                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  className="peer w-full rounded-xl border border-slate-300 bg-white/80 px-3.5 pb-2.5 pt-5 text-center text-xl font-bold tracking-[0.5em] text-slate-900 outline-none transition-colors focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200"
-                />
-                <label
-                  htmlFor="verify-otp"
-                  className="pointer-events-none absolute left-3.5 top-1.5 text-[11px] font-semibold uppercase tracking-wide text-indigo-500 transition-all peer-placeholder-shown:top-3.5 peer-placeholder-shown:text-sm peer-placeholder-shown:font-normal peer-placeholder-shown:normal-case peer-placeholder-shown:tracking-normal peer-placeholder-shown:text-slate-400 peer-focus:top-1.5 peer-focus:text-[11px] peer-focus:font-semibold peer-focus:uppercase peer-focus:tracking-wide peer-focus:text-indigo-500"
-                >
-                  Verification code
-                </label>
-              </div>
-
-              <button
-                type="submit"
-                disabled={busy}
-                className="w-full rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {busy ? 'Verifying…' : 'Verify Email'}
-              </button>
-            </form>
-
-            <div className="flex items-center justify-center gap-1 text-sm text-slate-500">
-              Didn&apos;t get the code?
-              <button
-                type="button"
-                onClick={onResend}
-                disabled={busy}
-                className="font-semibold text-indigo-600 underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                Resend OTP
-              </button>
+          <form onSubmit={onSubmit} className="space-y-4" noValidate>
+            <div className="relative">
+              <input
+                id="verify-otp"
+                type="text"
+                name="otp"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={6}
+                autoComplete="one-time-code"
+                value={otp}
+                placeholder=" "
+                onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                className={FLOAT_INPUT}
+              />
+              <label htmlFor="verify-otp" className={FLOAT_LABEL}>
+                Verification Code
+              </label>
             </div>
 
             <button
-              type="button"
-              onClick={() => router.push('/register')}
+              type="submit"
               disabled={busy}
-              className="w-full rounded-xl border border-slate-300 bg-white/80 px-4 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-white hover:text-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+              className="w-full rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-sm px-4 py-3 transition-all shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              Back
+              {busy ? 'Verifying…' : 'Verify Email'}
             </button>
+          </form>
 
-            <p className="text-center text-xs text-slate-400">
-              <a href="/login" className="underline-offset-2 hover:underline">
-                Back to sign in
-              </a>
-            </p>
+          <div className="flex items-center justify-center gap-1.5 text-xs sm:text-sm text-slate-500 pt-2">
+            <span>Didn&apos;t receive the code?</span>
+            <button
+              type="button"
+              onClick={onResend}
+              disabled={busy}
+              className="font-semibold text-indigo-600 hover:text-indigo-700 underline-offset-2 hover:underline disabled:opacity-60"
+            >
+              Resend OTP
+            </button>
           </div>
-        )}
-      </div>
-    </div>
+        </div>
+      )}
+    </AuthShell>
   );
 }
 
 function VerifyEmailFallback() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50 text-sm text-slate-400">
-      <div className="h-10 w-10 animate-spin rounded-full border-4 border-indigo-200 border-t-indigo-500" />
+    <div className="flex min-h-screen items-center justify-center bg-[#FAFAFC] text-sm text-slate-400">
+      <div className="h-8 w-8 animate-spin rounded-full border-2 border-indigo-200 border-t-indigo-600" />
     </div>
   );
 }
