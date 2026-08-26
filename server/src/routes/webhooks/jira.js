@@ -105,9 +105,7 @@ router.post('/', async (req, res) => {
     // 4. Determine event type and ID
     const supportedEvents = [
       'jira:issue_created', 'jira:issue_updated', 'jira:issue_deleted',
-      'comment_created', 'comment_updated', 'comment_deleted',
-      'worklog_created', 'worklog_updated', 'worklog_deleted',
-      'issuelink_created', 'issuelink_deleted'
+      'comment_created', 'comment_updated', 'comment_deleted'
     ];
     
     if (!supportedEvents.includes(webhookEvent)) {

@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { signOut } from 'next-auth/react';
 import { useTheme } from '../theme/ThemeProvider';
 import SlackSidebarSection from './SlackSidebarSection';
-import { LayoutDashboard, GitBranch, MessagesSquare, ListTodo, BarChart, Hash, Users, FileText, Ticket, Puzzle, Key } from 'lucide-react';
+import { LayoutDashboard, GitBranch, MessagesSquare, ListTodo, BarChart, Hash, Users, FileText, Ticket, Puzzle, Key, FolderKanban } from 'lucide-react';
 
 /**
  * TASK-107 — workspace shell sidebar. Rendered by the /workspace/[workspaceId]
@@ -20,15 +20,16 @@ export default function WorkspaceSidebar({ workspaceId, role }) {
 
   const items = [
     { href: base, label: 'Overview', matchExact: true, icon: LayoutDashboard },
+    { href: `${base}/projects`, label: 'Projects', icon: FolderKanban },
+    { href: `${base}/tasks`, label: 'Tasks', icon: ListTodo },
+    { href: `${base}/reports`, label: 'Reports', icon: FileText },
+    { href: `${base}/analytics`, label: 'Analytics', icon: BarChart },
+    { href: `${base}/developers`, label: 'Developers', icon: Users },
+    { href: `${base}/integrations`, label: 'Integrations', icon: Puzzle },
     { href: `${base}/repositories`, label: 'Repositories', icon: GitBranch },
     { href: `${base}/communication`, label: 'Communication', icon: MessagesSquare },
-    { href: `${base}/tasks`, label: 'Tasks', icon: ListTodo },
-    { href: `${base}/analytics`, label: 'Analytics', icon: BarChart },
     { href: `${base}/channels`, label: 'Channels', icon: Hash },
-    { href: `${base}/developers`, label: 'Developers', icon: Users },
-    { href: `${base}/reports`, label: 'Reports', icon: FileText },
     { href: `${base}/tickets`, label: 'Tickets', icon: Ticket },
-    { href: `${base}/integrations`, label: 'Integrations', icon: Puzzle },
     { href: `${base}/invitation`, label: 'Invitation & Password', icon: Key },
   ];
 
@@ -73,11 +74,10 @@ export default function WorkspaceSidebar({ workspaceId, role }) {
             key={item.href}
             href={item.href}
             aria-current={isActive(item) ? 'page' : undefined}
-            className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
-              isActive(item)
+            className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${isActive(item)
                 ? 'bg-white/10 text-white'
                 : 'text-slate-300 hover:bg-white/5 hover:text-white'
-            }`}
+              }`}
           >
             {item.icon && <item.icon className="h-4 w-4" />}
             {item.label}

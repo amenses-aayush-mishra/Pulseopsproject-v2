@@ -1,11 +1,8 @@
-'use client';
-
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { signOut, useSession } from 'next-auth/react';
-import { Check } from 'lucide-react';
-import AISummaryPanel from './AISummaryPanel';
-import AnalyticsCards from './AnalyticsCards';
+import { Check, FolderKanban, ListTodo, FileText, BarChart, Users, Puzzle, ChevronRight } from 'lucide-react';
 
 // Backend API base — mirror of /login and /onboarding.
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
@@ -103,8 +100,6 @@ export default function WorkspaceDashboard() {
         });
         const data = await res.json().catch(() => ({}));
 
-        // 403 = stale/insufficient membership. Keep the active session fully
-        // intact (no update, no navigation) and surface an inline banner.
         if (res.status === 403) {
           setSwitchError(
             data?.message ||
@@ -117,8 +112,6 @@ export default function WorkspaceDashboard() {
           return;
         }
 
-        // 1) Rotate the Express JWT in client storage FIRST so raw API calls
-        //    outside NextAuth carry the new tenant context immediately.
         if (data.token) {
           try {
             localStorage.setItem('pulseops_token', data.token);
@@ -127,16 +120,12 @@ export default function WorkspaceDashboard() {
           }
         }
 
-        // 2) Sync the NextAuth session cookie: accessToken rotation + new
-        //    activeOrganizationId/role. Awaited BEFORE any navigation/refresh
-        //    so the middleware never sees a stale token (stale-mount guard).
         await update({
           accessToken: data.token,
           activeOrganizationId: data.activeOrganizationId || orgId,
           role: data.role || orgRole,
         });
 
-        // 3) Soft-refresh strictly after update() resolves.
         setShowSwitcher(false);
         router.refresh();
       } catch (err) {
@@ -145,8 +134,6 @@ export default function WorkspaceDashboard() {
         setSwitching(false);
       }
     },
-    // activeOrganizationId derives from the session; session.accessToken fuels
-    // the switch request, so both are deliberate dependencies.
     [activeOrganizationId, session?.accessToken, update, router]
   );
 
@@ -155,12 +142,11 @@ export default function WorkspaceDashboard() {
       localStorage.removeItem('pulseops_token');
       sessionStorage.clear();
     } catch (err) {
-      // storage unavailable — proceed with the session sign-out anyway
+      // storage unavailable
     }
     await signOut({ callbackUrl: '/login' });
   };
 
-  // TASK-113 — send an invitation (owner/admin only; the backend re-checks).
   const onInvite = async (e) => {
     e.preventDefault();
     setInviteError(null);
@@ -177,7 +163,7 @@ export default function WorkspaceDashboard() {
       try {
         storedToken = localStorage.getItem('pulseops_token');
       } catch (storageErr) {
-        // storage unavailable — fall back to the session accessToken
+        // storage unavailable
       }
       const bearer = session?.accessToken || storedToken;
       const res = await fetch(INVITE_ENDPOINT, {
@@ -235,8 +221,53 @@ export default function WorkspaceDashboard() {
   const organizations = me?.availableOrganizations || [];
   const activeName = me?.activeOrganization?.name || 'Current workspace';
   const email = session?.user?.email || '—';
-  // Owner/admin can invite teammates (the backend enforces this too).
   const canInvite = role === 'owner' || role === 'admin';
+  const base = activeOrganizationId ? `/workspace/${activeOrganizationId}` : '';
+
+  const overviewCards = [
+    {
+      title: 'Projects & Workspaces',
+      description: 'Manage projects, switch workspace context, and inspect imported repositories.',
+      href: `${base}/projects`,
+      icon: FolderKanban,
+      color: 'from-blue-500 to-indigo-600',
+    },
+    {
+      title: 'Tasks',
+      description: 'View real Jira issues, track status, priority, assignees, and project progress.',
+      href: `${base}/tasks`,
+      icon: ListTodo,
+      color: 'from-indigo-500 to-purple-600',
+    },
+    {
+      title: 'Reports',
+      description: 'AI-generated engineering health summaries, executive reports, and recommendations.',
+      href: `${base}/reports`,
+      icon: FileText,
+      color: 'from-purple-500 to-pink-600',
+    },
+    {
+      title: 'Analytics',
+      description: 'Organization health score, KPI trends, risks & alerts, and source event distribution.',
+      href: `${base}/analytics`,
+      icon: BarChart,
+      color: 'from-emerald-500 to-teal-600',
+    },
+    {
+      title: 'Developers',
+      description: 'Per-developer health status, contribution metrics, and workload overview.',
+      href: `${base}/developers`,
+      icon: Users,
+      color: 'from-amber-500 to-orange-600',
+    },
+    {
+      title: 'Integrations',
+      description: 'Connect and configure Jira, GitHub, Slack, webhooks, and sync controls.',
+      href: `${base}/integrations`,
+      icon: Puzzle,
+      color: 'from-rose-500 to-red-600',
+    },
+  ];
 
   return (
     <div className="relative min-h-screen bg-slate-50 text-slate-900">
@@ -252,7 +283,7 @@ export default function WorkspaceDashboard() {
               P
             </span>
             <div>
-              <p className="text-sm font-semibold leading-tight text-slate-900">PulseOps</p>
+              <p className="text-sm font-semibold leading-tight text-slate-900">PulseOps Workspace</p>
               <p className="text-xs text-slate-500">{activeName}</p>
             </div>
           </div>
@@ -336,46 +367,18 @@ export default function WorkspaceDashboard() {
           </div>
         )}
 
-        {/* TICKET-8 — AI Engineering Health Summary Panel */}
-        <AISummaryPanel organizationId={activeOrganizationId} />
-        <main className="mt-8">
-          {/* Live analytics widgets — health score, KPI trends, team health, risks */}
-          <AnalyticsCards organizationId={activeOrganizationId} />
-
-          <div className="mb-6 grid gap-4 sm:grid-cols-3">
-            <div className="rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm shadow-indigo-100/50 backdrop-blur-xl">
-              <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
-                Active Services
-              </p>
-              <p className="mt-1.5 text-2xl font-bold text-slate-900">0</p>
-              <p className="mt-1 text-xs text-slate-500">No services connected yet</p>
-            </div>
-            <div className="rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm shadow-indigo-100/50 backdrop-blur-xl">
-              <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
-                Deployment Status
-              </p>
-              <p className="mt-1.5 text-2xl font-bold text-slate-900">—</p>
-              <p className="mt-1 text-xs text-slate-500">No deployments yet</p>
-            </div>
-            <div className="rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm shadow-indigo-100/50 backdrop-blur-xl">
-              <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
-                Team Members
-              </p>
-              <p className="mt-1.5 text-2xl font-bold text-slate-900">1</p>
-              <p className="mt-1 text-xs text-slate-500">
-                You ({role ? role.charAt(0).toUpperCase() + role.slice(1) : 'member'}) — invite
-                teammates to grow your workspace
-              </p>
-            </div>
-          </div>
-
+        <main className="mt-8 space-y-8">
+          {/* Welcome Banner */}
           <div className="rounded-2xl border border-white/60 bg-white/70 p-8 shadow-xl shadow-indigo-100/60 backdrop-blur-xl">
             <p className="text-xs font-semibold uppercase tracking-widest text-indigo-600">
-              Active workspace
+              Workspace Overview
             </p>
-            <h1 className="mt-1.5 text-2xl font-semibold text-slate-900">
-              Welcome back{email !== '—' ? `, ${email}` : ''}
+            <h1 className="mt-1.5 text-3xl font-extrabold text-slate-900">
+              Welcome to {activeName}
             </h1>
+            <p className="mt-2 text-sm text-slate-600 max-w-2xl">
+              Navigate to specialized pages using the sidebar or quick cards below to view real task lists, AI health reports, organizational analytics, and developer activity.
+            </p>
 
             <dl className="mt-6 grid gap-4 sm:grid-cols-2">
               <div className="rounded-xl border border-slate-200/80 bg-white/60 p-4">
@@ -404,6 +407,43 @@ export default function WorkspaceDashboard() {
                 {meError}
               </p>
             )}
+          </div>
+
+          {/* Quick Navigation Cards Hub */}
+          <div>
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-400 mb-4">
+              Workspace Hub
+            </h2>
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {overviewCards.map((card) => {
+                const Icon = card.icon;
+                return (
+                  <Link
+                    key={card.title}
+                    href={card.href}
+                    className="group relative flex flex-col justify-between rounded-2xl border border-white/60 bg-white/70 p-6 shadow-sm shadow-indigo-100/50 backdrop-blur-xl transition hover:-translate-y-0.5 hover:shadow-md hover:border-indigo-200"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <div className={`flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br ${card.color} text-white shadow-sm`}>
+                          <Icon className="h-5 w-5" />
+                        </div>
+                        <ChevronRight className="h-5 w-5 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-indigo-600" />
+                      </div>
+                      <h3 className="mt-4 text-base font-semibold text-slate-900 group-hover:text-indigo-600 transition-colors">
+                        {card.title}
+                      </h3>
+                      <p className="mt-1.5 text-xs text-slate-500 leading-relaxed">
+                        {card.description}
+                      </p>
+                    </div>
+                    <div className="mt-6 flex items-center gap-1 text-xs font-semibold text-indigo-600">
+                      Open {card.title} <span aria-hidden="true">→</span>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
           </div>
         </main>
 

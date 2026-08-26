@@ -801,10 +801,6 @@ function JiraPanel({ workspaceId, token }) {
   const [webhookResult, setWebhookResult] = useState(null);
   const [webhookVerified, setWebhookVerified] = useState(false);
 
-  // Issues preview
-  const [issues, setIssues] = useState([]);
-  const [issuesLoading, setIssuesLoading] = useState(false);
-
   const headers = { Authorization: `Bearer ${token}`, 'x-organization-id': workspaceId };
   const [webhookUrl, setWebhookUrl] = useState(
     process.env.NEXT_PUBLIC_BACKEND_URL
@@ -853,22 +849,6 @@ function JiraPanel({ workspaceId, token }) {
     }
   };
 
-  const loadIssues = async (projectKey) => {
-    if (!token || !projectKey) return;
-    setIssuesLoading(true);
-    try {
-      const res = await fetch(`${API_BASE}/api/integrations/jira/issues?projectKey=${encodeURIComponent(projectKey)}&limit=10`, { headers });
-      if (res.ok) {
-        const data = await res.json();
-        setIssues(data.issues || []);
-      }
-    } catch {
-      // Ignore
-    } finally {
-      setIssuesLoading(false);
-    }
-  };
-
   useEffect(() => {
     if (!token) {
       setStatusLoading(false);
@@ -888,23 +868,16 @@ function JiraPanel({ workspaceId, token }) {
   }, [isConnected]);
 
   useEffect(() => {
-    if (selectedProjectKey) {
-      loadIssues(selectedProjectKey);
-    }
-  }, [selectedProjectKey]);
-
-  useEffect(() => {
     let intervalId;
     if (status?.syncStates?.some(s => s.status === 'syncing')) {
       intervalId = setInterval(() => {
         loadStatus();
-        if (selectedProjectKey) loadIssues(selectedProjectKey);
       }, 3000);
     }
     return () => {
       if (intervalId) clearInterval(intervalId);
     };
-  }, [status, selectedProjectKey]);
+  }, [status]);
 
   const handleConnect = async () => {
     setConnecting(true);
@@ -941,7 +914,6 @@ function JiraPanel({ workspaceId, token }) {
         setIsConnected(false);
         setProjects([]);
         setSelectedProjectKey('');
-        setIssues([]);
       } else {
         setDisableMsg({ ok: false, message: data?.error || 'Could not disable Jira.' });
       }
@@ -966,7 +938,6 @@ function JiraPanel({ workspaceId, token }) {
       if (res.ok && data.success) {
         setSyncResult({ ok: true, message: `Synced ${data.synced} issues from ${data.projectKey}.`, synced: data.synced });
         loadStatus();
-        loadIssues(selectedProjectKey);
       } else {
         setSyncResult({ ok: false, message: data.error || 'Sync failed.' });
       }
@@ -991,6 +962,7 @@ function JiraPanel({ workspaceId, token }) {
       if (res.ok && data.success) {
         setWebhookResult({ ok: true, message: data.message || 'Webhook registered successfully.', webhookId: data.webhookId });
         setWebhookVerified(data.verified === true);
+        setWebhookRegistered(true);
         if (data.webhookUrl) setWebhookUrl(data.webhookUrl);
         loadStatus();
       } else {
@@ -1217,50 +1189,7 @@ function JiraPanel({ workspaceId, token }) {
                 </div>
               )}
 
-              {/* Recent Issues Preview */}
-              {selectedProjectKey && issues.length > 0 && (
-                <div className="space-y-3">
-                  <h4 className="text-sm font-semibold text-slate-900">Recent Issues (last 10)</h4>
-                  <div className="rounded-lg border border-slate-200 overflow-hidden">
-                    {issuesLoading ? (
-                      <div className="flex justify-center py-6">
-                        <Loader2 className="h-6 w-6 animate-spin text-slate-300" />
-                      </div>
-                    ) : (
-                      <div className="divide-y divide-slate-100 max-h-60 overflow-y-auto">
-                        {issues.slice(0, 10).map((issue) => (
-                          <div key={issue.jiraIssueId} className="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-slate-50">
-                            <div className="min-w-0 flex-1">
-                              <a
-                                href={`${siteUrl}/browse/${issue.issueKey}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-sm font-medium text-slate-800 hover:text-indigo-600 truncate block"
-                              >
-                                {issue.issueKey}: {issue.summary}
-                              </a>
-                              <div className="flex items-center gap-2 mt-1 text-xs text-slate-500">
-                                <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-slate-100 text-slate-600 capitalize">
-                                  {issue.status}
-                                </span>
-                                <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium bg-indigo-50 text-indigo-700">
-                                  {issue.issueType}
-                                </span>
-                                {issue.assignee && (
-                                  <span className="truncate max-w-xs">👤 {issue.assignee.displayName}</span>
-                                )}
-                              </div>
-                            </div>
-                            <span className="shrink-0 text-xs text-slate-400">
-                              {formatDate(issue.updated)}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
+
             </>
           )}
         </div>

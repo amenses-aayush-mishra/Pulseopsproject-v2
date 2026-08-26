@@ -181,27 +181,23 @@ class JiraService {
   async registerWebhook(accessToken, cloudId, webhookUrl, projectKey, secret) {
     try {
       // Jira Cloud REST API v3 — requires manage:jira-webhook OAuth 2.0 scope.
-      // The old rest/webhooks/1.0/webhook path is the Connect (app descriptor)
-      // API that only accepts Connect JWT, not OAuth 2.0 bearer tokens.
+      // Supported Jira Cloud REST API v3 event IDs.
+      const validEvents = [
+        'jira:issue_created',
+        'jira:issue_updated',
+        'jira:issue_deleted',
+        'comment_created',
+        'comment_updated',
+        'comment_deleted',
+      ];
+
       const response = await axios.post(
         `${this.apiBaseUrl}/ex/jira/${cloudId}/rest/api/3/webhook`,
         {
           url: webhookUrl,
           webhooks: [
             {
-              events: [
-                'jira:issue_created',
-                'jira:issue_updated',
-                'jira:issue_deleted',
-                'comment_created',
-                'comment_updated',
-                'comment_deleted',
-                'worklog_created',
-                'worklog_updated',
-                'worklog_deleted',
-                'issuelink_created',
-                'issuelink_deleted'
-              ],
+              events: validEvents,
               jqlFilter: `project = ${projectKey}`,
             },
           ],
@@ -224,12 +220,7 @@ class JiraService {
       return {
         id: result.createdWebhookId,
         url: webhookUrl,
-        events: [
-          'jira:issue_created', 'jira:issue_updated', 'jira:issue_deleted',
-          'comment_created', 'comment_updated', 'comment_deleted',
-          'worklog_created', 'worklog_updated', 'worklog_deleted',
-          'issuelink_created', 'issuelink_deleted'
-        ],
+        events: validEvents,
       };
     } catch (error) {
       if (error.status && !error.response) throw error; // already normalised
@@ -425,9 +416,7 @@ class JiraService {
   eventsMatch(events) {
     const required = [
       'jira:issue_created', 'jira:issue_updated', 'jira:issue_deleted',
-      'comment_created', 'comment_updated', 'comment_deleted',
-      'worklog_created', 'worklog_updated', 'worklog_deleted',
-      'issuelink_created', 'issuelink_deleted'
+      'comment_created', 'comment_updated', 'comment_deleted'
     ];
     return required.every(e => events.includes(e));
   }
