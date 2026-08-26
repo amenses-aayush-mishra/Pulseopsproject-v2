@@ -108,7 +108,7 @@ export default function WorkspaceDashboard() {
         if (res.status === 403) {
           setSwitchError(
             data?.message ||
-              'Forbidden. You are not an active member of this organization.'
+            'Forbidden. You are not an active member of this organization.'
           );
           return;
         }
@@ -293,11 +293,10 @@ export default function WorkspaceDashboard() {
                         type="button"
                         disabled={switching}
                         onClick={() => onSwitchWorkspace(org.id, org.role)}
-                        className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm transition ${
-                          selected
-                            ? 'bg-indigo-50 font-medium text-indigo-800'
-                            : 'text-slate-600 hover:bg-slate-100'
-                        }`}
+                        className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm transition ${selected
+                          ? 'bg-indigo-50 font-medium text-indigo-800'
+                          : 'text-slate-600 hover:bg-slate-100'
+                          }`}
                       >
                         <span className="flex min-w-0 items-center gap-2">
                           {selected ? (
@@ -318,7 +317,7 @@ export default function WorkspaceDashboard() {
                 </div>
               )}
             </div>
-                      <button
+            <button
               type="button"
               onClick={onSignOut}
               className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-white/80 px-3.5 py-2 text-sm font-medium text-rose-600 shadow-sm transition hover:border-rose-300 hover:bg-rose-50"
@@ -338,7 +337,7 @@ export default function WorkspaceDashboard() {
         )}
 
         {/* TICKET-8 — AI Engineering Health Summary Panel */}
-          <AISummaryPanel organizationId={activeOrganizationId} />
+        <AISummaryPanel organizationId={activeOrganizationId} />
         <main className="mt-8">
           {/* Live analytics widgets — health score, KPI trends, team health, risks */}
           <AnalyticsCards organizationId={activeOrganizationId} />

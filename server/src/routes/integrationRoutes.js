@@ -50,7 +50,7 @@ router.get(
 
     authUrl.searchParams.append(
       'redirect_uri',
-       process.env.GITHUB_CALLBACK_URL
+      process.env.GITHUB_CALLBACK_URL
     );
     authUrl.searchParams.append('scope', 'repo repo:hook read:org');
     authUrl.searchParams.append('state', state);
@@ -62,7 +62,7 @@ router.get(
 router.get('/connect', authenticate, verifyTenantAccess, requirePermission('manage_integrations'), (req, res) => {
   // Redirect internally to the named route.
   req.url = '/github/connect';
-  router.handle(req, res, () => {});
+  router.handle(req, res, () => { });
 });
 
 // ---------------------------------------------------------------------------
@@ -73,8 +73,8 @@ router.get('/github/callback', async (req, res) => {
   if (!code || !state) {
     return res.status(400).json({ error: 'Missing code or state parameter.' });
   }
-  
-  
+
+
   console.log("RECEIVED STATE:", state);
 
   const integration = await Integration.findOne({ provider: 'github', state });
@@ -429,7 +429,7 @@ router.post('/jira', (req, res) => {
 // Slack legacy path /api/integrations/slack
 router.post('/slack-events', (req, res) => {
   req.url = '/slack';
-  router.handle(req, res, () => {});
+  router.handle(req, res, () => { });
 });
 
 // slack part
@@ -480,7 +480,7 @@ router.get(
     res.json({ url: authUrl.toString() });
   }
 );
- 
+
 // ---------------------------------------------------------------------------
 // GET /api/integrations/slack/callback  (OAuth redirect from Slack)
 // No authenticate/verifyTenantAccess here — mirrors /github/callback, since
@@ -493,10 +493,10 @@ router.get('/slack/callback', async (req, res) => {
   if (!code || !state) {
     return res.status(400).json({ error: 'Missing code or state parameter.' });
   }
- 
+
   const integration = await Integration.findOne({ provider: 'slack', state });
   if (!integration) return res.status(400).json({ error: 'Invalid or expired OAuth state.' });
- 
+
   // Slack's oauth.v2.access endpoint expects application/x-www-form-urlencoded,
   // unlike GitHub's JSON body — this is a required deviation for Slack's API
   // to actually accept the exchange request, not a stylistic choice.
@@ -511,14 +511,14 @@ router.get('/slack/callback', async (req, res) => {
     }),
   });
   const tokenData = await tokenRes.json();
- 
+
   if (!tokenData.ok || !tokenData.incoming_webhook?.url) {
     console.error('[slack/callback] Slack OAuth error:', tokenData.error || 'unknown');
     return res.status(400).json({ error: 'Failed to exchange Slack code for a webhook.' });
   }
- 
+
   const webhook = tokenData.incoming_webhook;
- 
+
   // Reuses the same generic accessToken field GitHub stores its encrypted
   // token in — the Slack Incoming Webhook URL is the equivalent bearer
   // credential for this provider, so no new encryptedWebhookUrl field.
@@ -540,7 +540,7 @@ router.get('/slack/callback', async (req, res) => {
   integration.status = 'active';
   integration.state = undefined; // consumed — prevents replay of this callback
   await integration.save();
- 
+
   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
   res.redirect(
     `${frontendUrl}/workspace/${integration.organizationId}/integrations?connected=slack`
@@ -587,7 +587,7 @@ router.post(
     if (!integration?.accessToken) {
       return res.status(404).json({ error: 'Slack not connected for this workspace.' });
     }
- 
+
     try {
       const payload = buildTestMessagePayload();
       // Prefer sending with the bot token to the integration's own channel. The
@@ -630,6 +630,8 @@ router.post(
       if (!delivered) {
         return res.status(502).json({ error: 'Slack rejected the test message. Please reconnect Slack.' });
       }
+
+      return res.status(200).json({ success: true, message: 'Test message sent to Slack.' });
 
       return res.status(200).json({ success: true, message: 'Test message sent to Slack.' });
     } catch (err) {
@@ -1073,16 +1075,16 @@ router.post(
 
       // 1. Initialize or update sync state
       const syncState = await JiraSyncState.findOneAndUpdate(
-        { 
+        {
           organizationId: req.organizationId,
           jiraCloudId: integration.jiraCloudId,
           projectKey
         },
-        { 
-          $set: { 
+        {
+          $set: {
             status: 'syncing',
             lastError: null
-          } 
+          }
         },
         { upsert: true, new: true }
       );
@@ -1102,9 +1104,9 @@ router.post(
       integration.lastSyncAt = new Date();
       await integration.save();
 
-      return res.status(202).json({ 
-        success: true, 
-        message: 'Sync started in background', 
+      return res.status(202).json({
+        success: true,
+        message: 'Sync started in background',
         projectKey,
         syncStateId: syncState._id
       });
@@ -1278,7 +1280,7 @@ router.post(
 
       if (existingWebhook) {
         console.log('[jira/register-webhook] Found existing matching webhook:', existingWebhook.id);
-        
+
         // Verify it matches our criteria
         const verification = await JiraService.verifyWebhook(
           accessToken,
@@ -1384,7 +1386,7 @@ router.post('/github', verifyWebhookSignature, (req, res) => {
   const event = req.headers['x-github-event'] || 'unknown';
   const payload = req.body;
   console.log(`[webhook/github] event=${event} repo=${payload?.repository?.full_name}`);
- 
+
   if (event === 'push') {
     console.log(
       `[webhook/github] push ref=${payload.ref} commits=${(payload.commits || []).length}`
@@ -1396,15 +1398,15 @@ router.post('/github', verifyWebhookSignature, (req, res) => {
   } else if (event === 'ping') {
     return res.json({ ok: true, message: 'pong' });
   }
- 
+
   res.status(200).json({ received: true, event });
 });
- 
+
 // ---------------------------------------------------------------------------
 // POST /api/webhooks/slack  (Slack events + URL verification)
 // ---------------------------------------------------------------------------
 router.post('/slack', verifySlackWebhook, handleSlackWebhook);
- 
+
 // ---------------------------------------------------------------------------
 // POST /api/webhooks/jira  (Jira issue webhooks)
 // ---------------------------------------------------------------------------
@@ -1412,22 +1414,22 @@ router.post('/jira', (req, res) => {
   const body = req.body || {};
   const webhookEvent = body.webhookEvent || 'unknown';
   const issueKey = body.issue?.key || 'N/A';
- 
+
   console.log(`[webhook/jira] event=${webhookEvent} issue=${issueKey}`);
- 
+
   if (webhookEvent === 'jira:issue_created') {
     console.log('[webhook/jira] New issue created:', issueKey, body.issue?.fields?.summary);
   } else if (webhookEvent === 'jira:issue_updated') {
     console.log('[webhook/jira] Issue updated:', issueKey, body.issue?.fields?.status?.name);
   }
- 
+
   res.status(200).json({ received: true, event: webhookEvent, issue: issueKey });
 });
- 
+
 // Slack legacy path /api/integrations/slack
 router.post('/slack-events', (req, res) => {
   req.url = '/slack';
-  router.handle(req, res, () => {});
+  router.handle(req, res, () => { });
 });
- 
+
 module.exports = router;

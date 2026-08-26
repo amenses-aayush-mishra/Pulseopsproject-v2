@@ -284,56 +284,56 @@ function GitHubPanel({ workspaceId, token }) {
                   </div>
                 )}
                 <div className="space-y-3">
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
-                  <input
-                    type="text"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Search repositories..."
-                    className="w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 py-2 text-sm text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200"
-                  />
-                </div>
-                <div className="rounded-lg border border-slate-200 divide-y divide-slate-100 overflow-hidden max-h-48 overflow-y-auto">
-                  {filteredRepos.length === 0 && (
-                    <p className="p-4 text-sm text-slate-400">No repositories found.</p>
-                  )}
-                  {filteredRepos.map((repo) => (
-                    <label
-                      key={repo.id}
-                      className="flex cursor-pointer items-center gap-4 px-4 py-3 hover:bg-slate-50 transition-colors"
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+                    <input
+                      type="text"
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      placeholder="Search repositories..."
+                      className="w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 py-2 text-sm text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200"
+                    />
+                  </div>
+                  <div className="rounded-lg border border-slate-200 divide-y divide-slate-100 overflow-hidden max-h-48 overflow-y-auto">
+                    {filteredRepos.length === 0 && (
+                      <p className="p-4 text-sm text-slate-400">No repositories found.</p>
+                    )}
+                    {filteredRepos.map((repo) => (
+                      <label
+                        key={repo.id}
+                        className="flex cursor-pointer items-center gap-4 px-4 py-3 hover:bg-slate-50 transition-colors"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedRepos.includes(repo.id)}
+                          onChange={() => toggleRepo(repo.id)}
+                          className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-slate-900 truncate flex items-center gap-2">
+                            {repo.full_name || repo.name}
+                            {repo.private && (
+                              <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600">Private</span>
+                            )}
+                          </p>
+                          <p className="text-xs text-slate-500 mt-0.5">
+                            Updated {repo.updated_at ? new Date(repo.updated_at).toLocaleDateString() : '—'}
+                          </p>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                  <div className="flex items-center justify-end">
+                    <button
+                      onClick={handleSync}
+                      disabled={selectedRepos.length === 0 || syncing}
+                      className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700 disabled:opacity-60"
                     >
-                      <input
-                        type="checkbox"
-                        checked={selectedRepos.includes(repo.id)}
-                        onChange={() => toggleRepo(repo.id)}
-                        className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-slate-900 truncate flex items-center gap-2">
-                          {repo.full_name || repo.name}
-                          {repo.private && (
-                            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600">Private</span>
-                          )}
-                        </p>
-                        <p className="text-xs text-slate-500 mt-0.5">
-                          Updated {repo.updated_at ? new Date(repo.updated_at).toLocaleDateString() : '—'}
-                        </p>
-                      </div>
-                    </label>
-                  ))}
+                      {syncing && <Loader2 className="h-4 w-4 animate-spin" />}
+                      Import Selected ({selectedRepos.length})
+                    </button>
+                  </div>
                 </div>
-                <div className="flex items-center justify-end">
-                  <button
-                    onClick={handleSync}
-                    disabled={selectedRepos.length === 0 || syncing}
-                    className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700 disabled:opacity-60"
-                  >
-                    {syncing && <Loader2 className="h-4 w-4 animate-spin" />}
-                    Import Selected ({selectedRepos.length})
-                  </button>
-                </div>
-              </div>
               </>
             )}
           </div>
@@ -574,12 +574,12 @@ function SlackPanel({ workspaceId, token }) {
 
   const badge = isConnected
     ? status && status.scopesHealthy === false ? (
-        <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-sm font-medium text-amber-700 ring-1 ring-inset ring-amber-600/20">
-          <Loader2 className="h-3 w-3" /> Scopes outdated
-        </span>
-      ) : (
-        <ConnectedBadge />
-      )
+      <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-sm font-medium text-amber-700 ring-1 ring-inset ring-amber-600/20">
+        <Loader2 className="h-3 w-3" /> Scopes outdated
+      </span>
+    ) : (
+      <ConnectedBadge />
+    )
     : undefined;
 
   const syncChip = (c) => {
@@ -714,9 +714,8 @@ function SlackPanel({ workspaceId, token }) {
               {syncResult && (
                 <div
                   role={syncResult.ok ? 'status' : 'alert'}
-                  className={`border-b border-slate-100 px-4 py-2.5 text-xs font-medium ${
-                    syncResult.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
-                  }`}
+                  className={`border-b border-slate-100 px-4 py-2.5 text-xs font-medium ${syncResult.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
+                    }`}
                 >
                   {syncResult.ok ? '✓ Sync complete. ' : '⚠ Sync partially failed. '}
                   {syncResult.message}
@@ -748,11 +747,10 @@ function SlackPanel({ workspaceId, token }) {
             {testResult && (
               <div
                 role={testResult.ok ? 'status' : 'alert'}
-                className={`rounded-lg border px-4 py-3 text-sm font-medium ${
-                  testResult.ok
-                    ? 'border-emerald-100 bg-emerald-50 text-emerald-800'
-                    : 'border-rose-200 bg-rose-50 text-rose-700'
-                }`}
+                className={`rounded-lg border px-4 py-3 text-sm font-medium ${testResult.ok
+                  ? 'border-emerald-100 bg-emerald-50 text-emerald-800'
+                  : 'border-rose-200 bg-rose-50 text-rose-700'
+                  }`}
               >
                 {testResult.ok ? '✓ ' : ''}
                 {testResult.message}
@@ -1006,7 +1004,7 @@ function JiraPanel({ workspaceId, token }) {
   };
 
   const copyWebhookUrl = () => {
-    navigator.clipboard.writeText(webhookUrl).then(() => {});
+    navigator.clipboard.writeText(webhookUrl).then(() => { });
   };
 
   const formatDate = (dateStr) => {
@@ -1038,11 +1036,10 @@ function JiraPanel({ workspaceId, token }) {
             {disableMsg && (
               <div
                 role={disableMsg.ok ? 'status' : 'alert'}
-                className={`rounded-lg border px-3 py-2 text-sm font-medium ${
-                  disableMsg.ok
+                className={`rounded-lg border px-3 py-2 text-sm font-medium ${disableMsg.ok
                     ? 'border-emerald-100 bg-emerald-50 text-emerald-800'
                     : 'border-rose-200 bg-rose-50 text-rose-700'
-                }`}
+                  }`}
               >
                 {disableMsg.message}
               </div>
@@ -1291,7 +1288,7 @@ export default function IntegrationsPage({ params }) {
       </div>
 
       <GitHubPanel workspaceId={workspaceId} token={token} />
-      <SlackPanel workspaceId={workspaceId} token={token}/>
+      <SlackPanel workspaceId={workspaceId} token={token} />
       <JiraPanel workspaceId={workspaceId} token={token} />
     </div>
   );
