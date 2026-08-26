@@ -55,22 +55,22 @@ function buildTestMessagePayload() {
         },
       },
       {
-      "type": "section",
-      "text": {
-        "type": "mrkdwn",
-        "text": "This is a section block with a button."
-      },
-      "accessory": {
-        "type": "button",
+        "type": "section",
         "text": {
-          "type": "plain_text",
-          "text": "Click Me",
-          "emoji": true
+          "type": "mrkdwn",
+          "text": "This is a section block with a button."
         },
-        "value": "click_me_123",
-        "action_id": "button-action"
+        "accessory": {
+          "type": "button",
+          "text": {
+            "type": "plain_text",
+            "text": "Click Me",
+            "emoji": true
+          },
+          "value": "click_me_123",
+          "action_id": "button-action"
+        }
       }
-    }
     ],
   };
 }

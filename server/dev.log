@@ -1,0 +1,21 @@
+
+> pulseops-server@1.0.0 dev
+> nodemon server.js
+
+[33m[nodemon] 3.1.14[39m
+[33m[nodemon] to restart at any time, enter `rs`[39m
+[33m[nodemon] watching path(s): *.*[39m
+[33m[nodemon] watching extensions: js,mjs,cjs,json[39m
+[32m[nodemon] starting `node server.js`[39m
+[32m[nodemon] restarting due to changes...[39m
+[gemini] using model: gemini-3.6-flash
+Connecting to MongoDB at: mongodb+srv://***:***@pulseops-cluster.kxglbhu.mongodb.net/pulseops
+[32m[nodemon] starting `node server.js`[39m
+[gemini] using model: gemini-3.6-flash
+Connecting to MongoDB at: mongodb+srv://***:***@pulseops-cluster.kxglbhu.mongodb.net/pulseops
+✅ MongoDB connected
+[slackQueue] Slack worker started.
+Server running on port 5000
+[jira/auth] SAVED STATE: a1131d9e3e85600fbb599e219f5cc17a2259bdf5
+[jira/auth] Authorize URL: https://auth.atlassian.com/authorize?audience=api.atlassian.com&client_id=CdFseiETmjTg2ho6RpiGFkVovAWnLTDk&scope=read%3Ajira-work+read%3Ajira-user+manage%3Ajira-webhook+offline_access&redirect_uri=https%3A%2F%2Fsecret-obtrusive-gatherer.ngrok-free.dev%2Fapi%2Fintegrations%2Fjira%2Fcallback&response_type=code&prompt=consent&state=a1131d9e3e85600fbb599e219f5cc17a2259bdf5
+[31m[nodemon] app crashed - waiting for file changes before starting...[39m

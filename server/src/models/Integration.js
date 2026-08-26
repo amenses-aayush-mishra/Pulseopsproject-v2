@@ -11,18 +11,26 @@ const integrationSchema = new Schema({
   state: { type: String },
   accessToken: { type: String },
   refreshToken: { type: String },
+  // Slack bot token (xoxb-...) used for Slack Web API calls when the
+  // integration is running in Events API mode (mirroring/pipeline). Kept
+  // separate from `accessToken`, which stores the Incoming Webhook URL.
+  botToken: { type: String, default: null },
+  slackTeamId: { type: String, default: null },
   slackChannelId: { type: String, default: null },
   slackChannelName: { type: String, default: null },
   slackTeamId: { type: String, default: null },
   slackTeamName: { type: String, default: null },
-  // Slack bot (xoxb) token for Web API calls (conversations.history/replies,
-  // users.list). Encrypted at rest — never exposed to the browser.
-  slackBotToken: { type: String, default: null },
   metadata: { type: Schema.Types.Mixed, default: {} },
   // TASK-108 — webhook activity trail (updated by POST /api/integrations/:provider/webhook).
   lastWebhookEvent: { type: String, default: null },
   lastWebhookAt: { type: Date, default: null },
   lastWebhookId: { type: String, default: null },
+  // Jira-specific fields
+  jiraSiteUrl: { type: String },
+  jiraCloudId: { type: String },
+  tokenExpiresAt: { type: Date },
+  jiraWebhookId: { type: String },
+  lastSyncAt: { type: Date },
 }, { timestamps: true });
 
 integrationSchema.index({ organizationId: 1, provider: 1 }, { unique: true });
