@@ -11,6 +11,7 @@ const authRoutes = require('./src/routes/authRoutes');
 const orgRoutes = require('./src/routes/orgRoutes');
 const integrationRoutes = require('./src/routes/integrationRoutes');
 const repositoryRoutes = require('./src/routes/repositoryRoutes');
+const communicationRoutes = require('./src/routes/communicationRoutes');
 const securityHeaders = require('./src/middleware/securityHeaders');
 const errorHandler = require('./src/middleware/errorHandler');
 
@@ -61,6 +62,9 @@ app.use('/api/integrations', integrationRoutes);
 
 // Repositories module — lists imported GitHub repositories for a workspace.
 app.use('/api/repositories', repositoryRoutes);
+
+// Communication module — Slack message history for the current workspace.
+app.use('/api/communication', communicationRoutes);
 
 // Webhook routes (GitHub, Slack, Jira) — raw-body access is already set up
 // by the express.json verify callback above, so these share the same parser.

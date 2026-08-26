@@ -32,7 +32,7 @@ export default function ForcePasswordChangeModal({ mustChangePassword }) {
     
     setBusy(true);
     try {
-      const bearer = session?.accessToken ||
+      const bearer = (session as any)?.accessToken ||
         (() => { try { return localStorage.getItem('pulseops_token'); } catch { return null; } })();
       const res = await fetch(CHANGE_PASSWORD_ENDPOINT, {
         method: 'POST',

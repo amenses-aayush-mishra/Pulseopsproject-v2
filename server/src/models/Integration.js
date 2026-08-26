@@ -13,7 +13,11 @@ const integrationSchema = new Schema({
   refreshToken: { type: String },
   slackChannelId: { type: String, default: null },
   slackChannelName: { type: String, default: null },
+  slackTeamId: { type: String, default: null },
   slackTeamName: { type: String, default: null },
+  // Slack bot (xoxb) token for Web API calls (conversations.history/replies,
+  // users.list). Encrypted at rest — never exposed to the browser.
+  slackBotToken: { type: String, default: null },
   metadata: { type: Schema.Types.Mixed, default: {} },
   // TASK-108 — webhook activity trail (updated by POST /api/integrations/:provider/webhook).
   lastWebhookEvent: { type: String, default: null },

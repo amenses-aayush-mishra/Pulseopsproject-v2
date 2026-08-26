@@ -2,6 +2,7 @@
 const crypto = require('crypto');
 const express = require('express');
 const { verifyWebhookSignature } = require('../middleware/verifyGithubWebhook');
+const verifySlackWebhook = require('../middleware/verifySlackWebhook');
 const authenticate = require('../middleware/authenticate');
 const verifyTenantAccess = require('../middleware/verifyTenantAccess');
 const requirePermission = require('../middleware/requirePermission');
@@ -9,9 +10,11 @@ const { encrypt } = require('../utils/crypto');
 const { githubRequest } = require('../services/githubClient');
 const Integration = require('../models/Integration');
 const Repository = require('../models/Repository');
+const SlackChannelMessage = require('../models/SlackChannelMessage');
 const {
   slackWebhookRequest,
   buildTestMessagePayload,
+  postMessage,
 } = require('../services/slackClient');
 
 const router = express.Router();
@@ -277,31 +280,130 @@ router.post('/github', verifyWebhookSignature, (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// POST /api/webhooks/slack  (Slack events + URL verification)
+// Slack Events API persistence
 // ---------------------------------------------------------------------------
-router.post('/slack', (req, res) => {
-  const body = req.body || {};
 
-  // URL Verification challenge (Slack sends this when you first register the endpoint).
-  if (body.type === 'url_verification') {
-    console.log('[webhook/slack] URL verification challenge received.');
-    return res.json({ challenge: body.challenge });
+/**
+ * Map an incoming Slack `message` event to a PulseOps workspace + connected
+ * channel, then persist it (deduplicated). Runner for the Events API webhook.
+ * The GET /api/communication/messages route backfills user names/avatars from
+ * users.list, so the webhook only stores what the event already carries.
+ */
+async function persistSlackEvent({ body, event }) {
+  // The same Slack app can be connected to multiple PulseOps workspaces in the
+  // same Slack team (one per channel). Because multiple active integrations can
+  // share `slackTeamId`, resolve the correct one by matching the event's channel
+  // first — otherwise a team_id-only findOne can return a different workspace's
+  // integration and drop the message as "unrelated".
+  const matches = await Integration.find({
+    provider: 'slack',
+    slackTeamId: body.team_id,
+    status: 'active',
+  });
+  const integration = matches.find((i) => i.slackChannelId === event.channel) || matches[0] || null;
+  if (!integration) {
+    console.warn(`[webhook/slack] No active Slack integration for team ${body.team_id}`);
+    return;
   }
 
-  if (body.type === 'event_callback') {
-    const eventType = body.event?.type || 'unknown';
-    console.log(`[webhook/slack] event_callback type=${eventType}`);
+  // Workspace isolation: only persist messages from THIS workspace's connected
+  // channel — other channels in the same Slack team are ignored.
+  if (event.channel !== integration.slackChannelId) {
+    console.log(
+      `[webhook/slack] Ignoring message in channel ${event.channel} (connected=${integration.slackChannelId})`
+    );
+    return;
+  }
 
-    // Placeholder: route specific event types here.
-    if (eventType === 'app_mention') {
-      console.log('[webhook/slack] Bot was mentioned:', body.event?.text);
-    } else if (eventType === 'message') {
-      console.log('[webhook/slack] Message received in channel:', body.event?.channel);
+  // MVP: the timeline is history-driven, so edits/deletes are ignored rather
+  // than applied incrementally.
+  if (['message_deleted', 'message_changed'].includes(event.subtype)) {
+    return;
+  }
+
+  const messageTs = event.ts;
+  if (!messageTs) return;
+
+  const userId = event.user || null;
+  const bot = Boolean(event.bot_id);
+  const threadTs = event.thread_ts || null;
+
+  const doc = {
+    organizationId: integration.organizationId,
+    slackTeamId: integration.slackTeamId || null,
+    channelId: event.channel,
+    messageTs,
+    userId,
+    userName: bot
+      ? event.username || event.bot_profile?.name || 'Slack bot'
+      : userId || 'Unknown',
+    // userAvatar is backfilled by GET /api/communication/messages (users.list).
+    userAvatar: null,
+    text: typeof event.text === 'string' ? event.text : '',
+    threadTs,
+    isReply: Boolean(threadTs && threadTs !== messageTs),
+    replyCount: typeof event.reply_count === 'number' ? event.reply_count : 0,
+    reactions: Array.isArray(event.reactions)
+      ? event.reactions.map((r) => ({ name: r.name, count: r.count, users: r.users }))
+      : [],
+    attachments: Array.isArray(event.attachments) ? event.attachments : [],
+    files: Array.isArray(event.files) ? event.files : [],
+    bot,
+    eventId: body.event_id || null,
+  };
+
+  try {
+    await SlackChannelMessage.updateOne(
+      { organizationId: integration.organizationId, channelId: event.channel, messageTs },
+      { $set: doc },
+      { upsert: true }
+    );
+  } catch (err) {
+    // 11000 = duplicate key on a concurrent/redelivered event — already stored.
+    if (err?.code !== 11000) console.error('[webhook/slack] persist error:', err.message);
+  }
+}
+
+/** Shared Slack Events API handler (URL verification + event_callback). */
+async function handleSlackWebhook(req, res) {
+  try {
+    const body = req.body || {};
+
+    // URL Verification challenge (Slack sends this when registering the endpoint).
+    if (body.type === 'url_verification') {
+      console.log('[webhook/slack] URL verification challenge received.');
+      return res.json({ challenge: body.challenge });
     }
-  }
 
-  res.status(200).send('OK');
-});
+    if (body.type === 'event_callback') {
+      const event = body.event || {};
+      const eventType = event.type || 'unknown';
+      console.log(
+        `[webhook/slack] event_callback type=${eventType} team=${body.team_id} channel=${event.channel}`
+      );
+
+      if (eventType === 'message' && event.channel && event.ts) {
+        await persistSlackEvent({ body, event });
+      } else if (eventType === 'app_mention') {
+        console.log('[webhook/slack] Bot was mentioned:', event.text);
+      }
+    }
+
+    res.status(200).send('OK');
+  } catch (err) {
+    console.error('[webhook/slack] handler error:', err.message);
+    // Always ack Slack; persistence failures are logged, never surfaced to Slack.
+    res.status(200).send('OK');
+  }
+}
+
+
+// ---------------------------------------------------------------------------
+// POST /api/webhooks/slack  (Slack events + URL verification)
+// Incoming Slack Events API requests are cryptographically verified with the
+// Slack Signing Secret before any event is processed (see verifySlackWebhook).
+// ---------------------------------------------------------------------------
+router.post('/slack', verifySlackWebhook, handleSlackWebhook);
 
 // ---------------------------------------------------------------------------
 // POST /api/webhooks/jira  (Jira issue webhooks)
@@ -330,44 +432,20 @@ router.post('/slack-events', (req, res) => {
 
 module.exports = router;
 
-// slack part 
-router.get(
-  '/slack/authorize',
-  authenticate,
-  verifyTenantAccess,
-  requirePermission('manage_integrations'),
-  async (req, res) => {
-    const clientId = process.env.SLACK_CLIENT_ID;
-    if (!clientId) {
-      return res.status(503).json({ error: 'Slack OAuth is not configured on this server.' });
-    }
-    const state = crypto.randomBytes(20).toString('hex');
-    await Integration.findOneAndUpdate(
-      { organizationId: req.organizationId, provider: 'slack' },
-      {
-        $setOnInsert: { organizationId: req.organizationId, provider: 'slack' },
-        $set: { state, status: 'pending' },
-      },
-      { upsert: true, new: true }
-    );
- 
-    const authUrl = new URL('https://slack.com/oauth/v2/authorize');
-    authUrl.searchParams.append('client_id', clientId);
-    authUrl.searchParams.append('redirect_uri', process.env.SLACK_CALLBACK_URL);
-    // 'incoming-webhook' is the only bot scope needed for the MVP: posting
-    // AI summaries into a single channel the admin picks during the Slack
-    // OAuth consent screen. No chat:write / channels:read requested here.
-    authUrl.searchParams.append('scope', 'incoming-webhook');
-    authUrl.searchParams.append('state', state);
-    res.json({ url: authUrl.toString() });
-  }
-);
-
+// slack part
+// ---------------------------------------------------------------------------
 // GET /api/integrations/slack/authorize
-// Returns a Slack OAuth URL for the requesting organisation (Incoming Webhook).
+// Returns a Slack OAuth URL for the requesting organisation.
 // Mirrors /github/connect: authenticate -> verifyTenantAccess ->
 // requirePermission('manage_integrations'), random state stored on the
 // org's Slack Integration document before redirecting.
+//
+// Scopes: the original MVP only needed `incoming-webhook` (posting AI
+// summaries). The Communication module ALSO reads real channel history and
+// user profile data, so the bot scopes below are requested — Slack returns an
+// `access_token` (the bot token; stored encrypted as Integration.slackBotToken)
+// alongside the incoming-webhook URL. This extends the SAME Slack connection; it
+// does not create a second integration.
 // ---------------------------------------------------------------------------
 router.get(
   '/slack/authorize',
@@ -388,14 +466,16 @@ router.get(
       },
       { upsert: true, new: true }
     );
- 
+
     const authUrl = new URL('https://slack.com/oauth/v2/authorize');
     authUrl.searchParams.append('client_id', clientId);
     authUrl.searchParams.append('redirect_uri', process.env.SLACK_CALLBACK_URL);
-    // 'incoming-webhook' is the only bot scope needed for the MVP: posting
-    // AI summaries into a single channel the admin picks during the Slack
-    // OAuth consent screen. No chat:write / channels:read requested here.
-    authUrl.searchParams.append('scope', 'incoming-webhook');
+    // incoming-webhook keeps the existing "Send Test Message" live; the
+    // channel/user read scopes enable the Communication message history.
+    authUrl.searchParams.append(
+      'scope',
+      'incoming-webhook channels:history channels:read channels:join groups:history im:history mpim:history users:read files:read'
+    );
     authUrl.searchParams.append('state', state);
     res.json({ url: authUrl.toString() });
   }
@@ -443,6 +523,17 @@ router.get('/slack/callback', async (req, res) => {
   // token in — the Slack Incoming Webhook URL is the equivalent bearer
   // credential for this provider, so no new encryptedWebhookUrl field.
   integration.accessToken = encrypt(webhook.url);
+  // New: bot token (encrypted) enables reading real channel history for the
+  // Communication module + team id lets the Events API webhook map a Slack
+  // team back to this PulseOps workspace. Existing (webhook-only) connections
+  // simply leave these null until the workspace reconnects Slack.
+  //
+  // oauth.v2.access returns the bot token in the top-level `access_token`
+  // field (token_type "bot") — there is NO `bot_token` field in the response.
+  // Reading `access_token` is what actually populates slackBotToken so the
+  // Communication page can fetch channel history.
+  integration.slackBotToken = tokenData.access_token ? encrypt(tokenData.access_token) : null;
+  integration.slackTeamId = tokenData.team?.id || null;
   integration.slackChannelId = webhook.channel_id || null;
   integration.slackChannelName = webhook.channel || null;
   integration.slackTeamName = tokenData.team?.name || null;
@@ -499,13 +590,47 @@ router.post(
  
     try {
       const payload = buildTestMessagePayload();
-      const slackRes = await slackWebhookRequest(integration, payload);
- 
-      if (!slackRes.ok) {
-        console.error(`[slack/test] Slack webhook rejected the request: status=${slackRes.status}`);
+      // Prefer sending with the bot token to the integration's own channel. The
+      // stored incoming webhook can be bound to a DIFFERENT channel than the
+      // one PulseOps displays (webhooks ignore a `channel` override and always
+      // post to their own bound channel), so chat.postMessage to slackChannelId
+      // is the reliable path once the bot is a member (requires chat:write).
+      let delivered = false;
+      if (integration.slackBotToken && integration.slackChannelId) {
+        try {
+          const pm = await postMessage(integration, integration.slackChannelId, {
+            text: payload.text,
+            blocks: payload.blocks,
+          });
+          if (pm.ok) {
+            delivered = true;
+          } else {
+            console.error(`[slack/test] chat.postMessage not ok:`, pm.error);
+          }
+        } catch (pmErr) {
+          console.error('[slack/test] chat.postMessage error:', pmErr.message);
+        }
+      }
+
+      // Fallback: legacy incoming-webhook path (webhook-only connections that
+      // have no bot token). Slack Incoming Webhooks return HTTP 200 with a
+      // plain-text body of `ok` on success but can return 2xx with a NON-"ok"
+      // body on delivery failure — so verify the body too, not just res.ok.
+      if (!delivered) {
+        const slackRes = await slackWebhookRequest(integration, payload);
+        const body = await slackRes.text();
+        delivered = slackRes.ok && body.trim().toLowerCase() === 'ok';
+        if (!delivered) {
+          console.error(
+            `[slack/test] Slack webhook rejected the request: status=${slackRes.status} body=${body}`
+          );
+        }
+      }
+
+      if (!delivered) {
         return res.status(502).json({ error: 'Slack rejected the test message. Please reconnect Slack.' });
       }
- 
+
       return res.status(200).json({ success: true, message: 'Test message sent to Slack.' });
     } catch (err) {
       console.error('[slack/test] error:', err.message);
@@ -580,29 +705,7 @@ router.post('/github', verifyWebhookSignature, (req, res) => {
 // ---------------------------------------------------------------------------
 // POST /api/webhooks/slack  (Slack events + URL verification)
 // ---------------------------------------------------------------------------
-router.post('/slack', (req, res) => {
-  const body = req.body || {};
- 
-  // URL Verification challenge (Slack sends this when you first register the endpoint).
-  if (body.type === 'url_verification') {
-    console.log('[webhook/slack] URL verification challenge received.');
-    return res.json({ challenge: body.challenge });
-  }
- 
-  if (body.type === 'event_callback') {
-    const eventType = body.event?.type || 'unknown';
-    console.log(`[webhook/slack] event_callback type=${eventType}`);
- 
-    // Placeholder: route specific event types here.
-    if (eventType === 'app_mention') {
-      console.log('[webhook/slack] Bot was mentioned:', body.event?.text);
-    } else if (eventType === 'message') {
-      console.log('[webhook/slack] Message received in channel:', body.event?.channel);
-    }
-  }
- 
-  res.status(200).send('OK');
-});
+router.post('/slack', verifySlackWebhook, handleSlackWebhook);
  
 // ---------------------------------------------------------------------------
 // POST /api/webhooks/jira  (Jira issue webhooks)

@@ -2,9 +2,8 @@ import { getServerSession } from 'next-auth';
 import { redirect } from 'next/navigation';
 import { authOptions } from '../../../lib/authOptions';
 import { ThemeProvider } from '../../providers/ThemeProvider';
-import WorkspaceSidebar from '../../_components/WorkspaceSidebar';
 import Link from 'next/link';
-import { Settings, Puzzle, UserCircle, Search, Menu } from 'lucide-react';
+import { Settings, Puzzle, UserCircle, Search, Menu, MessagesSquare, LayoutDashboard, GitBranch, ListTodo } from 'lucide-react';
 
 export default async function WorkspaceLayout({ children, params }) {
   const workspaceId = params?.workspaceId;
@@ -39,13 +38,16 @@ export default async function WorkspaceLayout({ children, params }) {
             <div className="mb-4 px-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Workspace</div>
             
             <Link href={`/workspace/${workspaceId}`} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-indigo-600 transition-colors">
-              Projects
+              <LayoutDashboard className="h-4 w-4" /> Dashboard
             </Link>
             <Link href={`/workspace/${workspaceId}/repositories`} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-indigo-600 transition-colors">
-              Repositories
+              <GitBranch className="h-4 w-4" /> Repositories
+            </Link>
+            <Link href={`/workspace/${workspaceId}/communication`} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-indigo-600 transition-colors">
+              <MessagesSquare className="h-4 w-4" /> Communication
             </Link>
             <Link href={`/workspace/${workspaceId}/tasks`} className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 hover:text-indigo-600 transition-colors">
-              Tasks
+              <ListTodo className="h-4 w-4" /> Tasks
             </Link>
             
             <div className="mt-8 mb-4 px-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Administration</div>
