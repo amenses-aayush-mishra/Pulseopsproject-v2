@@ -116,7 +116,7 @@ export default function OnboardingPage() {
         try {
           localStorage.setItem('pulseops_token', data.token);
           setToken(data.token);
-        } catch {}
+        } catch { }
       }
 
       if (status === 'authenticated' && data && data.organization && data.organization._id) {
@@ -129,7 +129,7 @@ export default function OnboardingPage() {
             workspaceCount: 1,
             workspaces: [{ id: data.organization._id, name: data.organization.name || '', role: 'owner' }],
           });
-        } catch {}
+        } catch { }
       }
 
       const newWorkspaceId = data?.organization?._id;

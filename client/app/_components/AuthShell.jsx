@@ -13,7 +13,7 @@ export default function AuthShell({
 }) {
   return (
     <div className="min-h-screen bg-[#FAFAFC] text-slate-900 flex flex-col justify-between selection:bg-indigo-100 selection:text-indigo-900">
-      
+
       {/* ------------ Minimal Top Header Bar ------------ */}
       <header className="px-6 py-6 max-w-7xl w-full mx-auto flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2.5 group">
@@ -33,7 +33,7 @@ export default function AuthShell({
       {/* ------------ Main Form Content ------------ */}
       <main className="flex-1 flex items-center justify-center px-4 py-8 sm:px-6">
         <div className={`w-full ${maxWidth} relative`}>
-          
+
           {/* Optional Handwritten Annotation */}
           {handwrittenNote && (
             <div className="hidden sm:block absolute -top-5 -right-6 rotate-6 z-10 pointer-events-none">
@@ -45,7 +45,7 @@ export default function AuthShell({
 
           {/* Card Container */}
           <div className="bg-white border border-slate-200/80 rounded-2xl sm:rounded-3xl p-6 sm:p-8 shadow-md shadow-slate-900/5">
-            
+
             {/* Header Content */}
             {(eyebrow || title || subtitle) && (
               <div className="text-center mb-6">

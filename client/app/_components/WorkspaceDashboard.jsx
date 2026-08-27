@@ -17,8 +17,14 @@ import {
   Zap,
   Lock,
   User,
+  ListTodo,
   Settings,
   SlidersHorizontal,
+  FolderKanban,
+  FileText,
+  BarChart,
+  Users,
+  Puzzle
 } from 'lucide-react';
 
 const API_BASE = process.env.NEXT_PUBLIC_EXPRESS_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';

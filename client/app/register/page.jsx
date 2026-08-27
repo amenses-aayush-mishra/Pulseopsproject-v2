@@ -29,11 +29,10 @@ function Banner({ kind, children }) {
   return (
     <div
       role={kind === 'success' ? 'status' : 'alert'}
-      className={`rounded-xl border px-3.5 py-3 text-xs sm:text-sm ${
-        kind === 'success'
+      className={`rounded-xl border px-3.5 py-3 text-xs sm:text-sm ${kind === 'success'
           ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
           : 'border-rose-200 bg-rose-50 text-rose-800'
-      }`}
+        }`}
     >
       {children}
     </div>
@@ -99,7 +98,7 @@ function RegisterInner() {
 
   return (
     <div className="min-h-screen bg-[#FAFAFC] text-slate-900 flex flex-col justify-between selection:bg-indigo-100 selection:text-indigo-900">
-      
+
       {/* ------------ Top Header Bar (Minimal Logo Only) ------------ */}
       <header className="px-6 py-6 max-w-7xl w-full mx-auto flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2.5 group">
@@ -119,7 +118,7 @@ function RegisterInner() {
       {/* ------------ Main Form Content ------------ */}
       <main className="flex-1 flex items-center justify-center px-4 py-8 sm:px-6">
         <div className="w-full max-w-md relative">
-          
+
           {/* Subtle Handwritten Annotation */}
           <div className="hidden sm:block absolute -top-5 -right-6 rotate-6 z-10 pointer-events-none">
             <span className="font-handwriting text-slate-700 text-lg font-bold bg-[#FFFDF7] border border-amber-200/70 px-2.5 py-1 rounded-lg shadow-sm">
@@ -129,7 +128,7 @@ function RegisterInner() {
 
           {/* Card Container */}
           <div className="bg-white border border-slate-200/80 rounded-2xl sm:rounded-3xl p-6 sm:p-8 shadow-md shadow-slate-900/5">
-            
+
             {/* Header Content */}
             <div className="text-center mb-6">
               <div className="inline-flex items-center gap-1.5 mb-2">

@@ -28,11 +28,10 @@ function Banner({ kind, children }) {
   return (
     <div
       role={kind === 'success' ? 'status' : 'alert'}
-      className={`rounded-xl border px-3.5 py-3 text-xs sm:text-sm ${
-        kind === 'success'
+      className={`rounded-xl border px-3.5 py-3 text-xs sm:text-sm ${kind === 'success'
           ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
           : 'border-rose-200 bg-rose-50 text-rose-800'
-      }`}
+        }`}
     >
       {children}
     </div>

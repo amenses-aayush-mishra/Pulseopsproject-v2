@@ -129,7 +129,7 @@ export default function SelectWorkspacePage() {
       }
 
       if (data.token) {
-        try { localStorage.setItem('pulseops_token', data.token); } catch {}
+        try { localStorage.setItem('pulseops_token', data.token); } catch { }
       }
 
       await update({
@@ -169,13 +169,13 @@ export default function SelectWorkspacePage() {
           ? [1, 2].map((n) => <CardSkeleton key={n} />)
           : workspaces.length > 0
             ? workspaces.map((ws) => (
-                <WorkspaceCard
-                  key={ws.id}
-                  workspace={ws}
-                  onSelect={handleSelect}
-                  loading={switching === ws.id}
-                />
-              ))
+              <WorkspaceCard
+                key={ws.id}
+                workspace={ws}
+                onSelect={handleSelect}
+                loading={switching === ws.id}
+              />
+            ))
             : (
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-center text-xs sm:text-sm text-amber-900">
                 No workspaces found in your session.{' '}

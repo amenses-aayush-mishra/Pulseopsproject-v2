@@ -91,7 +91,7 @@ export default function InvitationLandingPage() {
       if (data.token) {
         try {
           localStorage.setItem('pulseops_token', data.token);
-        } catch {}
+        } catch { }
       }
       setSuccess('Password updated successfully.');
       await update({

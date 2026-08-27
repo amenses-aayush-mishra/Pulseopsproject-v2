@@ -45,13 +45,12 @@ function ErrorBanner({ error, email }) {
   return (
     <div
       role="alert"
-      className={`rounded-xl border px-3.5 py-3 text-xs sm:text-sm ${
-        isMismatch
+      className={`rounded-xl border px-3.5 py-3 text-xs sm:text-sm ${isMismatch
           ? 'border-rose-200 bg-rose-50 text-rose-800'
           : isUnverified
             ? 'border-amber-200 bg-amber-50 text-amber-900'
             : 'border-rose-200 bg-rose-50 text-rose-800'
-      }`}
+        }`}
     >
       {isMismatch
         ? `This invitation is locked to a different email. Sign in with the exact invited address (${error.message}).`
@@ -195,7 +194,7 @@ function LoginInner() {
       const user = sessionData?.user || {};
 
       if (sessionData?.accessToken) {
-        try { localStorage.setItem('pulseops_token', sessionData.accessToken); } catch {}
+        try { localStorage.setItem('pulseops_token', sessionData.accessToken); } catch { }
       }
 
       redirectedRef.current = true;
@@ -249,7 +248,7 @@ function LoginInner() {
 
   return (
     <div className="min-h-screen bg-[#FAFAFC] text-slate-900 flex flex-col justify-between selection:bg-indigo-100 selection:text-indigo-900">
-      
+
       {/* ------------ Top Header Bar (Minimal Logo Only) ------------ */}
       <header className="px-6 py-6 max-w-7xl w-full mx-auto flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2.5 group">
@@ -269,10 +268,10 @@ function LoginInner() {
       {/* ------------ Main Form Content ------------ */}
       <main className="flex-1 flex items-center justify-center px-4 py-8 sm:px-6">
         <div className="w-full max-w-md">
-          
+
           {/* Card Container */}
           <div className="bg-white border border-slate-200/80 rounded-2xl sm:rounded-3xl p-6 sm:p-8 shadow-md shadow-slate-900/5">
-            
+
             {/* Header Content */}
             <div className="text-center mb-6">
               <div className="inline-flex items-center gap-1.5 mb-2">
@@ -302,11 +301,10 @@ function LoginInner() {
                 role="tab"
                 aria-selected={tab === 'credentials'}
                 onClick={() => setTab('credentials')}
-                className={`rounded-lg px-3 py-2 text-xs sm:text-sm transition-all ${
-                  tab === 'credentials'
+                className={`rounded-lg px-3 py-2 text-xs sm:text-sm transition-all ${tab === 'credentials'
                     ? 'bg-white font-bold text-slate-900 shadow-sm'
                     : 'font-medium text-slate-500 hover:text-slate-900'
-                }`}
+                  }`}
               >
                 Email &amp; password
               </button>
@@ -316,11 +314,10 @@ function LoginInner() {
                   role="tab"
                   aria-selected={tab === 'oauth'}
                   onClick={() => setTab('oauth')}
-                  className={`rounded-lg px-3 py-2 text-xs sm:text-sm transition-all ${
-                    tab === 'oauth'
+                  className={`rounded-lg px-3 py-2 text-xs sm:text-sm transition-all ${tab === 'oauth'
                       ? 'bg-white font-bold text-slate-900 shadow-sm'
                       : 'font-medium text-slate-500 hover:text-slate-900'
-                  }`}
+                    }`}
                 >
                   Single sign-on
                 </button>
@@ -357,11 +354,10 @@ function LoginInner() {
                     readOnly={locked}
                     placeholder=" "
                     onChange={(e) => setEmail(e.target.value)}
-                    className={`${FLOAT_INPUT} ${
-                      locked
+                    className={`${FLOAT_INPUT} ${locked
                         ? 'cursor-not-allowed border-indigo-200 bg-indigo-50/50 text-indigo-900 focus:ring-indigo-200'
                         : ''
-                    }`}
+                      }`}
                   />
                   <label htmlFor="login-email" className={FLOAT_LABEL}>
                     Work Email

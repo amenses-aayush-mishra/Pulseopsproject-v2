@@ -26,11 +26,10 @@ function Banner({ kind, children }) {
   return (
     <div
       role={kind === 'success' ? 'status' : 'alert'}
-      className={`rounded-xl border px-3.5 py-3 text-xs sm:text-sm ${
-        kind === 'success'
+      className={`rounded-xl border px-3.5 py-3 text-xs sm:text-sm ${kind === 'success'
           ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
           : 'border-rose-200 bg-rose-50 text-rose-800'
-      }`}
+        }`}
     >
       {children}
     </div>
@@ -96,7 +95,7 @@ function VerifyEmailInner() {
         if (sessionData?.accessToken) {
           try {
             localStorage.setItem('pulseops_token', sessionData.accessToken);
-          } catch {}
+          } catch { }
         }
         router.replace('/onboarding');
         return;
@@ -150,8 +149,8 @@ function VerifyEmailInner() {
         verified
           ? 'Your account is now verified.'
           : email
-          ? `We sent a 6-digit verification code to ${email}.`
-          : 'Enter the 6-digit code sent to your email to verify your account.'
+            ? `We sent a 6-digit verification code to ${email}.`
+            : 'Enter the 6-digit code sent to your email to verify your account.'
       }
       footerLink={
         <Link href="/login" className="font-semibold text-indigo-600 hover:text-indigo-700 underline-offset-2 hover:underline">
