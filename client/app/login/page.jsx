@@ -154,14 +154,15 @@ function LoginInner() {
 
     if (status === 'authenticated' && session?.user) {
       const u = session.user;
-      const wCount = u.workspaceCount ?? (u.hasWorkspace ? 1 : 0);
+      const userWorkspaces = Array.isArray(u.workspaces) ? u.workspaces : [];
+      const wsId = u.activeOrganizationId || (userWorkspaces[0]?.id ?? null);
+      const hasWs = u.hasWorkspace || userWorkspaces.length > 0 || !!wsId;
       redirectedRef.current = true;
 
-      if (wCount === 0) {
-        window.location.href = '/onboarding';
+      if (hasWs && wsId) {
+        window.location.href = `/workspace/${wsId}`;
       } else {
-        const wsId = u.activeOrganizationId || (u.workspaces?.[0]?.id ?? null);
-        window.location.href = wsId ? `/workspace/${wsId}` : '/onboarding';
+        window.location.href = '/onboarding';
       }
     }
   }, [status, session, router, busy]);
@@ -198,20 +199,20 @@ function LoginInner() {
       }
 
       redirectedRef.current = true;
-      const { hasWorkspace, activeOrganizationId, isInvitedUser } = user;
+      const { hasWorkspace, activeOrganizationId, isInvitedUser, workspaces } = user;
+      const userWorkspaces = Array.isArray(workspaces) ? workspaces : [];
+      const wsId = activeOrganizationId || (userWorkspaces[0]?.id ?? null);
+      const hasWs = hasWorkspace || userWorkspaces.length > 0 || !!wsId;
 
       if (isInvitedUser || orgEmail) {
-        const targetOrg = activeOrganizationId || searchParams.get('workspaceId');
+        const targetOrg = wsId || searchParams.get('workspaceId');
         if (targetOrg) {
           window.location.href = `/workspace/${targetOrg}/invitations`;
         } else {
-          window.location.href = activeOrganizationId
-            ? `/workspace/${activeOrganizationId}`
-            : '/onboarding';
+          window.location.href = wsId ? `/workspace/${wsId}` : '/onboarding';
         }
-      } else if (hasWorkspace) {
-        const wsId = activeOrganizationId || user.workspaces?.[0]?.id;
-        window.location.href = wsId ? `/workspace/${wsId}` : '/onboarding';
+      } else if (hasWs && wsId) {
+        window.location.href = `/workspace/${wsId}`;
       } else {
         window.location.href = '/onboarding';
       }

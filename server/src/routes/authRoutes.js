@@ -126,6 +126,40 @@ const signAuthToken = (user, role) =>
   );
 
 /**
+ * Resolves accurate workspace context for the current user directly from DB memberships.
+ * Ensures user.activeOrganizationId is always set to a valid workspace if the user has any,
+ * or null if they have none. Saves user and returns payload for auth responses.
+ */
+const resolveUserWorkspaceContext = async (user) => {
+  const wpPayload = await fetchWorkspacePayload(user._id);
+
+  if (wpPayload.hasWorkspace) {
+    const hasValidActiveOrg =
+      user.activeOrganizationId &&
+      wpPayload.workspaces.some(
+        (w) => w.id === user.activeOrganizationId.toString()
+      );
+
+    if (!hasValidActiveOrg) {
+      user.activeOrganizationId = wpPayload.workspaces[0].id;
+      await user.save();
+    }
+  } else if (user.activeOrganizationId) {
+    user.activeOrganizationId = null;
+    await user.save();
+  }
+
+  const role = await resolveRole(user);
+  const token = signAuthToken(user, role);
+
+  return {
+    token,
+    role,
+    wpPayload,
+  };
+};
+
+/**
  * Invitation interceptor (TASK-106).
  * When an optional inviteToken is present on login/oauth-sync:
  *   - 404 if no pending, unexpired invitation matches the token hash.
@@ -694,16 +728,7 @@ router.post('/login', authRateLimiter, async (req, res) => {
         );
     }
 
-    const role = await resolveRole(user);
-    const wpPayload = await fetchWorkspacePayload(user._id);
-
-    // If the user has workspaces but no activeOrganizationId yet, pin to first.
-    if (wpPayload.hasWorkspace && !user.activeOrganizationId) {
-      user.activeOrganizationId = wpPayload.workspaces[0].id;
-      await user.save();
-    }
-
-    const token = signAuthToken(user, role);
+    const { token, role, wpPayload } = await resolveUserWorkspaceContext(user);
 
     return res.status(200).json({
       token,
@@ -775,16 +800,7 @@ router.post('/oauth/sync', authRateLimiter, async (req, res) => {
         );
     }
 
-    const role = await resolveRole(user);
-    const wpPayload = await fetchWorkspacePayload(user._id);
-
-    // If the user has workspaces but no activeOrganizationId yet, pin to first.
-    if (wpPayload.hasWorkspace && !user.activeOrganizationId) {
-      user.activeOrganizationId = wpPayload.workspaces[0].id;
-      await user.save();
-    }
-
-    const token = signAuthToken(user, role);
+    const { token, role, wpPayload } = await resolveUserWorkspaceContext(user);
 
     return res.status(200).json({
       token,

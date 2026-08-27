@@ -108,7 +108,7 @@ export default function SelectWorkspacePage() {
 
     try {
       const token = (() => {
-        try { return localStorage.setItem('pulseops_token'); } catch { return null; }
+        try { return session?.accessToken || localStorage.getItem('pulseops_token'); } catch { return session?.accessToken || null; }
       })();
 
       const res = await fetch(`${API_BASE}/api/organizations/switch-org`, {

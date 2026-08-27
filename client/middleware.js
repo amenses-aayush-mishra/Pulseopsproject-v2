@@ -32,20 +32,21 @@ export async function middleware(req) {
       url.search = `callbackUrl=${encodeURIComponent(pathname)}`;
       return NextResponse.redirect(url);
     }
+    const activeWs = token.activeOrganizationId || (Array.isArray(token.workspaces) && token.workspaces[0]?.id) || null;
     // Signed in but no active workspace yet → onboarding.
-    if (!token.activeOrganizationId) {
+    if (!activeWs) {
       const url = req.nextUrl.clone();
       url.pathname = '/onboarding';
       url.search = '';
       return NextResponse.redirect(url);
     }
-    // RBAC: the requested workspace must be the session's active workspace
-    // (membership is re-verified server-side by the layout + API).
+    // RBAC: the requested workspace must belong to the session
     const segments = pathname.split('/').filter(Boolean);
     const requested = segments[1]; // /workspace/{workspaceId}/...
-    if (requested && requested !== token.activeOrganizationId) {
+    const userWorkspaces = Array.isArray(token.workspaces) ? token.workspaces.map((w) => w.id) : [];
+    if (requested && requested !== activeWs && !userWorkspaces.includes(requested)) {
       const url = req.nextUrl.clone();
-      url.pathname = `/workspace/${token.activeOrganizationId}`;
+      url.pathname = `/workspace/${activeWs}`;
       url.search = '';
       return NextResponse.redirect(url);
     }
@@ -61,14 +62,15 @@ export async function middleware(req) {
       url.search = `callbackUrl=${encodeURIComponent(pathname)}`;
       return NextResponse.redirect(url);
     }
-    if (!token.activeOrganizationId) {
+    const activeWs = token.activeOrganizationId || (Array.isArray(token.workspaces) && token.workspaces[0]?.id) || null;
+    if (!activeWs) {
       const url = req.nextUrl.clone();
       url.pathname = '/onboarding';
       url.search = '';
       return NextResponse.redirect(url);
     }
     const url = req.nextUrl.clone();
-    url.pathname = `/workspace/${token.activeOrganizationId}`;
+    url.pathname = `/workspace/${activeWs}`;
     url.search = '';
     return NextResponse.redirect(url);
   }
@@ -82,8 +84,9 @@ export async function middleware(req) {
       url.search = `callbackUrl=${encodeURIComponent(pathname)}`;
       return NextResponse.redirect(url);
     }
-    const wCount = token.workspaceCount ?? (token.activeOrganizationId ? 1 : 0);
-    if (wCount === 0) {
+    const activeWs = token.activeOrganizationId || (Array.isArray(token.workspaces) && token.workspaces[0]?.id) || null;
+    const wCount = token.workspaceCount ?? (activeWs ? 1 : 0);
+    if (wCount === 0 && !activeWs) {
       const url = req.nextUrl.clone();
       url.pathname = '/onboarding';
       url.search = '';
@@ -95,16 +98,17 @@ export async function middleware(req) {
   // C — /login bypass guard for authenticated users with a workspace.
   // /onboarding is NOT blocked — existing users may add a 2nd workspace.
   if (pathname === '/login') {
-    if (token && token.activeOrganizationId) {
-      // Exception: allow /login when an explicit inviteToken is present so an
-      // existing user can process a pending invitation.
-      if (req.nextUrl.searchParams.get('inviteToken')) {
-        return NextResponse.next();
+    if (token) {
+      const activeWs = token.activeOrganizationId || (Array.isArray(token.workspaces) && token.workspaces[0]?.id) || null;
+      if (activeWs) {
+        if (req.nextUrl.searchParams.get('inviteToken')) {
+          return NextResponse.next();
+        }
+        const url = req.nextUrl.clone();
+        url.search = '';
+        url.pathname = `/workspace/${activeWs}`;
+        return NextResponse.redirect(url);
       }
-      const url = req.nextUrl.clone();
-      url.search = '';
-      url.pathname = `/workspace/${token.activeOrganizationId}`;
-      return NextResponse.redirect(url);
     }
     return NextResponse.next();
   }

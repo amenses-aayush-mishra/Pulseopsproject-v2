@@ -52,7 +52,7 @@ function NoSessionBanner() {
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const { status, update } = useSession();
+  const { data: session, status, update } = useSession();
 
   const [name, setName] = useState('');
   const [teamSize, setTeamSize] = useState('');
@@ -62,15 +62,48 @@ export default function OnboardingPage() {
   const [token, setToken] = useState(null);
   const [tokenReady, setTokenReady] = useState(false);
 
+  // Sync token from NextAuth session or localStorage
   useEffect(() => {
+    let stored = null;
     try {
-      setToken(localStorage.getItem('pulseops_token') || null);
+      stored = localStorage.getItem('pulseops_token') || null;
     } catch {
-      setToken(null);
-    } finally {
-      setTokenReady(true);
+      stored = null;
     }
-  }, []);
+    const activeToken = session?.accessToken || stored;
+    if (activeToken) {
+      setToken(activeToken);
+      if (session?.accessToken && typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('pulseops_token', session.accessToken);
+        } catch {}
+      }
+    } else {
+      setToken(null);
+    }
+    setTokenReady(true);
+  }, [session?.accessToken, status]);
+
+  // Redirect existing users with a workspace away from onboarding
+  useEffect(() => {
+    if (status === 'loading') return;
+
+    if (status === 'authenticated' && session?.user) {
+      const u = session.user;
+      const hasWs =
+        u.hasWorkspace ||
+        (Array.isArray(u.workspaces) && u.workspaces.length > 0) ||
+        !!u.activeOrganizationId;
+      const wsId = u.activeOrganizationId || (u.workspaces?.[0]?.id ?? null);
+
+      const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+      const isExplicitNew = params?.get('mode') === 'create' || params?.get('new') === 'true';
+
+      if (hasWs && wsId && !isExplicitNew) {
+        router.replace(`/workspace/${wsId}`);
+      }
+    }
+  }, [status, session, router]);
 
   const onSubmit = async (e) => {
     e.preventDefault();
@@ -94,11 +127,12 @@ export default function OnboardingPage() {
     setBusy(true);
 
     try {
+      const activeToken = token || session?.accessToken;
       const res = await fetch(ONBOARD_ENDPOINT, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token.trim()}` } : {}),
+          ...(activeToken ? { Authorization: `Bearer ${activeToken.trim()}` } : {}),
         },
         body: JSON.stringify({ name: trimmedName, teamSize, primaryFocus: trimmedFocus }),
       });
@@ -153,7 +187,7 @@ export default function OnboardingPage() {
       handwrittenNote="Set up in 2 mins ✨"
     >
       <ErrorBanner error={error} />
-      {tokenReady && !token && <NoSessionBanner />}
+      {tokenReady && status === 'unauthenticated' && !token && <NoSessionBanner />}
 
       <form onSubmit={onSubmit} className="space-y-4" noValidate>
         <div className="relative">

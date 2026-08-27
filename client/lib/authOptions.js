@@ -155,15 +155,19 @@ export const authOptions = {
 
     async jwt({ token, user, trigger, session }) {
       if (user) {
+        const userWorkspaces = Array.isArray(user.workspaces) ? user.workspaces : [];
+        const activeOrgId = user.activeOrganizationId || (userWorkspaces[0]?.id ?? null);
+        const userHasWs = user.hasWorkspace ?? (userWorkspaces.length > 0 || !!activeOrgId);
+
         token.accessToken = user.accessToken || null;
         token.userId = user.id;
-        token.activeOrganizationId = user.activeOrganizationId || null;
+        token.activeOrganizationId = activeOrgId;
         token.role = user.role || 'member';
         token.mustChangePassword = user.mustChangePassword || false;
         token.themeSettings = user.themeSettings || null;
-        token.hasWorkspace = user.hasWorkspace ?? !!user.activeOrganizationId;
-        token.workspaceCount = user.workspaceCount ?? 0;
-        token.workspaces = Array.isArray(user.workspaces) ? user.workspaces : [];
+        token.hasWorkspace = userHasWs;
+        token.workspaceCount = user.workspaceCount ?? userWorkspaces.length;
+        token.workspaces = userWorkspaces;
         token.isInvitedUser = user.isInvitedUser || false;
       }
       if (trigger === 'update' && session) {
@@ -186,14 +190,18 @@ export const authOptions = {
     async session({ session, token }) {
       session.accessToken = token.accessToken || null;
       if (session.user) {
+        const userWorkspaces = Array.isArray(token.workspaces) ? token.workspaces : [];
+        const activeOrgId = token.activeOrganizationId || (userWorkspaces[0]?.id ?? null);
+        const userHasWs = token.hasWorkspace ?? (userWorkspaces.length > 0 || !!activeOrgId);
+
         session.user.id = token.userId;
-        session.user.activeOrganizationId = token.activeOrganizationId || null;
+        session.user.activeOrganizationId = activeOrgId;
         session.user.role = token.role || null;
         session.user.mustChangePassword = token.mustChangePassword || false;
         session.user.themeSettings = token.themeSettings || null;
-        session.user.hasWorkspace = token.hasWorkspace ?? !!token.activeOrganizationId;
-        session.user.workspaceCount = token.workspaceCount ?? 0;
-        session.user.workspaces = Array.isArray(token.workspaces) ? token.workspaces : [];
+        session.user.hasWorkspace = userHasWs;
+        session.user.workspaceCount = token.workspaceCount ?? userWorkspaces.length;
+        session.user.workspaces = userWorkspaces;
         session.user.isInvitedUser = token.isInvitedUser || false;
       }
       return session;
