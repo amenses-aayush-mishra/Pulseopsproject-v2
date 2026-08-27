@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
-import { Loader2, Check, Copy, Search } from 'lucide-react';
+import { Loader2, Check, Copy, Search, ChevronDown, ChevronUp } from 'lucide-react';
 
 const API_BASE = process.env.NEXT_PUBLIC_EXPRESS_API_URL || 'http://localhost:5000';
 
@@ -10,19 +10,19 @@ const API_BASE = process.env.NEXT_PUBLIC_EXPRESS_API_URL || 'http://localhost:50
 
 function IntegrationCard({ icon, title, description, badge, topActions, action }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-      <div className="p-6 sm:p-8">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-slate-100">
+    <div className="rounded-2xl border border-slate-200/80 bg-white shadow-2xs overflow-hidden">
+      <div className="p-6 sm:p-7">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-4 min-w-0">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-slate-100 border border-slate-200/60 shadow-2xs">
               {icon}
             </div>
-            <div>
-              <h3 className="text-base font-semibold text-slate-900">{title}</h3>
-              <p className="text-sm text-slate-500 mt-0.5">{description}</p>
+            <div className="min-w-0">
+              <h3 className="text-base font-bold text-slate-900 truncate">{title}</h3>
+              <p className="text-sm text-slate-500 mt-0.5 truncate">{description}</p>
             </div>
           </div>
-          <div className="shrink-0 flex flex-col items-end gap-2">
+          <div className="shrink-0 flex items-center gap-3 self-end sm:self-auto">
             {badge}
             {topActions}
           </div>
@@ -35,8 +35,8 @@ function IntegrationCard({ icon, title, description, badge, topActions, action }
 
 function ConnectedBadge() {
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-sm font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
-      <Check className="h-3 w-3" /> Connected
+    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
+      <Check className="h-3.5 w-3.5" /> Connected
     </span>
   );
 }
@@ -100,6 +100,8 @@ function GitHubPanel({ workspaceId, token }) {
   const [connectError, setConnectError] = useState('');
   const [disabling, setDisabling] = useState(false);
   const [search, setSearch] = useState('');
+
+  const [showManageRepos, setShowManageRepos] = useState(false);
 
   const loadStatus = async () => {
     try {
@@ -188,6 +190,7 @@ function GitHubPanel({ workspaceId, token }) {
         setRepos([]);
         setSelectedRepos([]);
         setSyncSuccess(null);
+        setShowManageRepos(false);
       } else {
         const data = await res.json().catch(() => ({}));
         setConnectError(data?.error || 'Could not disable GitHub.');
@@ -240,9 +243,20 @@ function GitHubPanel({ workspaceId, token }) {
       icon={<GitHubIcon />}
       title="GitHub"
       description="Sync repositories and track pull requests automatically."
+      badge={isConnected ? <ConnectedBadge /> : undefined}
       topActions={
         isConnected ? (
-          <DisableButton onClick={handleDisable} disabled={disabling} loading={disabling} />
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowManageRepos(!showManageRepos)}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-50 transition-colors"
+            >
+              {showManageRepos ? <ChevronUp className="h-3.5 w-3.5 text-slate-400" /> : <ChevronDown className="h-3.5 w-3.5 text-slate-400" />}
+              <span>{showManageRepos ? 'Hide Repositories' : 'Manage Repositories'}</span>
+            </button>
+            <DisableButton onClick={handleDisable} disabled={disabling} loading={disabling} />
+          </div>
         ) : undefined
       }
       action={
@@ -254,13 +268,13 @@ function GitHubPanel({ workspaceId, token }) {
             <button
               onClick={handleConnect}
               disabled={connecting}
-              className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-slate-700 disabled:opacity-60"
+              className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-xs font-semibold text-white shadow-2xs transition-colors hover:bg-slate-800 disabled:opacity-60"
             >
               {connecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <GitHubIcon />}
               Connect GitHub
             </button>
           </div>
-        ) : (
+        ) : showManageRepos ? (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h4 className="text-sm font-semibold text-slate-900">Select repositories to track</h4>
@@ -268,7 +282,7 @@ function GitHubPanel({ workspaceId, token }) {
                 onClick={loadRepos}
                 className="text-xs text-indigo-600 hover:underline"
               >
-                Refresh
+                Refresh list
               </button>
             </div>
             {connectError && <p className="text-sm text-rose-600">{connectError}</p>}
@@ -279,7 +293,7 @@ function GitHubPanel({ workspaceId, token }) {
             ) : (
               <>
                 {syncSuccess && (
-                  <div className="rounded-lg bg-emerald-50 border border-emerald-100 p-4 text-sm font-medium text-emerald-800">
+                  <div className="rounded-xl bg-emerald-50 border border-emerald-100 p-3.5 text-xs font-medium text-emerald-800">
                     ✓ {syncSuccess}
                   </div>
                 )}
@@ -291,10 +305,10 @@ function GitHubPanel({ workspaceId, token }) {
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
                       placeholder="Search repositories..."
-                      className="w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 py-2 text-sm text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200"
+                      className="w-full rounded-xl border border-slate-200/80 bg-white pl-9 pr-3 py-2 text-sm text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
                     />
                   </div>
-                  <div className="rounded-lg border border-slate-200 divide-y divide-slate-100 overflow-hidden max-h-48 overflow-y-auto">
+                  <div className="rounded-xl border border-slate-200/80 divide-y divide-slate-100 overflow-hidden max-h-48 overflow-y-auto bg-white">
                     {filteredRepos.length === 0 && (
                       <p className="p-4 text-sm text-slate-400">No repositories found.</p>
                     )}
@@ -327,7 +341,7 @@ function GitHubPanel({ workspaceId, token }) {
                     <button
                       onClick={handleSync}
                       disabled={selectedRepos.length === 0 || syncing}
-                      className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700 disabled:opacity-60"
+                      className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow-2xs transition-colors hover:bg-indigo-700 disabled:opacity-60"
                     >
                       {syncing && <Loader2 className="h-4 w-4 animate-spin" />}
                       Import Selected ({selectedRepos.length})
@@ -337,7 +351,7 @@ function GitHubPanel({ workspaceId, token }) {
               </>
             )}
           </div>
-        )
+        ) : null
       }
     />
   );
@@ -353,16 +367,11 @@ function SlackPanel({ workspaceId, token }) {
   const [channelName, setChannelName] = useState('');
   const [connecting, setConnecting] = useState(false);
   const [connectError, setConnectError] = useState('');
-  const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState(null);
   const [disabling, setDisabling] = useState(false);
   const [disableError, setDisableError] = useState(null);
   const [status, setStatus] = useState(null);
   const [conversations, setConversations] = useState([]);
   const [convLoading, setConvLoading] = useState(false);
-  const [syncing, setSyncing] = useState(false);
-  const [retryingId, setRetryingId] = useState(null);
-  const [syncResult, setSyncResult] = useState(null);
 
   const headers = { Authorization: `Bearer ${token}`, 'x-organization-id': workspaceId };
 
@@ -459,7 +468,6 @@ function SlackPanel({ workspaceId, token }) {
         setIsConnected(false);
         setTeamName('');
         setChannelName('');
-        setTestResult(null);
         setConversations([]);
         setStatus(null);
       } else {
@@ -473,143 +481,15 @@ function SlackPanel({ workspaceId, token }) {
     }
   };
 
-  const handleSync = async () => {
-    setSyncing(true);
-    setSyncResult(null);
-    try {
-      const res = await fetch(`${API_BASE}/api/integrations/slack/sync`, {
-        method: 'POST',
-        headers: { ...headers, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ conversationIds: [] }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        setSyncResult({ ok: false, message: data.error || 'Sync could not be started.' });
-        return;
-      }
-      let latest = null;
-      for (let i = 0; i < 15; i += 1) {
-        await new Promise((r) => setTimeout(r, 2500));
-        const [statusData, convData] = await Promise.all([loadStatus(), loadConversations()]);
-        if (convData) latest = convData;
-        const stillSyncing = (latest || []).some((c) => c.syncStatus === 'SYNCING');
-        if (!stillSyncing) break;
-      }
-      const failed = (latest || []).filter((c) => c.syncStatus === 'SYNC_ERROR');
-      const synced = (latest || []).filter((c) => c.syncStatus === 'SYNCED');
-      const errorCodes = {};
-      for (const c of failed) {
-        errorCodes[c.syncErrorCode || 'unknown'] = (errorCodes[c.syncErrorCode || 'unknown'] || 0) + 1;
-      }
-      let message;
-      if (failed.length === 0) {
-        message = `${synced.length} conversation(s) synced.`;
-      } else if (errorCodes.not_in_channel) {
-        message = `Invite the PulseOps bot to ${errorCodes.not_in_channel} private channel(s), then retry sync.`;
-      } else if (errorCodes.missing_scope) {
-        message = 'Slack permissions need updating. Reconnect Slack, then sync again.';
-      } else if (errorCodes.invalid_auth || errorCodes.account_inactive) {
-        message = 'Slack authorization has expired. Reconnect Slack.';
-      } else {
-        message = `${failed.length} conversation(s) require additional Slack access.`;
-      }
-      setSyncResult({ ok: failed.length === 0, message });
-    } catch {
-      setSyncResult({ ok: false, message: 'Sync could not be started. Could not reach server.' });
-    } finally {
-      setSyncing(false);
-    }
-  };
-
-  const handleRetry = async (conversationId) => {
-    if (retryingId) return;
-    setRetryingId(conversationId);
-    setSyncResult(null);
-    try {
-      const res = await fetch(`${API_BASE}/api/integrations/slack/sync`, {
-        method: 'POST',
-        headers: { ...headers, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ conversationIds: [conversationId] }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        setSyncResult({ ok: false, message: data.error || 'Retry could not be started.' });
-        return;
-      }
-      for (let i = 0; i < 15; i += 1) {
-        await new Promise((r) => setTimeout(r, 2500));
-        const convData = await loadConversations();
-        const target = (convData || []).find((c) => c.id === conversationId);
-        if (!target || target.syncStatus !== 'SYNCING') break;
-      }
-      await Promise.all([loadStatus(), loadConversations()]);
-      setSyncResult({ ok: true, message: 'Retry finished. Check the conversation status below.' });
-    } catch {
-      setSyncResult({ ok: false, message: 'Retry could not be started. Could not reach server.' });
-    } finally {
-      setRetryingId(null);
-    }
-  };
-
-  const handleTestMessage = async () => {
-    setTesting(true);
-    setTestResult(null);
-    try {
-      const res = await fetch(`${API_BASE}/api/integrations/slack/test`, {
-        method: 'POST',
-        headers,
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok && data.success) {
-        setTestResult({ ok: true, message: data.message || 'Test message sent to Slack.' });
-      } else {
-        setTestResult({ ok: false, message: data.error || 'Failed to send test message.' });
-      }
-    } catch {
-      setTestResult({ ok: false, message: 'Could not reach the server.' });
-    } finally {
-      setTesting(false);
-    }
-  };
-
   const badge = isConnected
     ? status && status.scopesHealthy === false ? (
-      <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-sm font-medium text-amber-700 ring-1 ring-inset ring-amber-600/20">
+      <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-700 ring-1 ring-inset ring-amber-600/20">
         <Loader2 className="h-3 w-3" /> Scopes outdated
       </span>
     ) : (
       <ConnectedBadge />
     )
     : undefined;
-
-  const syncChip = (c) => {
-    if (c.syncStatus === 'SYNCED') return <span className="text-xs font-medium text-emerald-600">✓ {c.messageCount || 0} msgs</span>;
-    if (c.syncStatus === 'SYNCING') return <span className="inline-flex items-center gap-1 text-xs text-amber-600"><Loader2 className="h-3 w-3 animate-spin" /> Syncing…</span>;
-    if (c.syncStatus === 'SYNC_ERROR') {
-      return (
-        <span className="flex items-center gap-2">
-          {retryingId === c.id ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-600" />
-          ) : (
-            <button
-              type="button"
-              onClick={() => handleRetry(c.id)}
-              className="inline-flex items-center rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-600 transition-colors hover:bg-slate-50"
-            >
-              Retry
-            </button>
-          )}
-          <span
-            title={`${c.syncErrorCode ? `[${c.syncErrorCode}] ` : ''}${c.syncError || 'Sync error'}`}
-            className="text-xs text-rose-600"
-          >
-            ⚠ Sync error
-          </span>
-        </span>
-      );
-    }
-    return <span className="text-xs text-slate-400">Not synced</span>;
-  };
 
   return (
     <IntegrationCard
@@ -619,7 +499,7 @@ function SlackPanel({ workspaceId, token }) {
       badge={badge}
       topActions={
         isConnected ? (
-          <div className="flex flex-col items-end gap-2">
+          <div className="flex items-center gap-2">
             {disableError && <p className="text-xs text-rose-600">{disableError}</p>}
             <DisableButton onClick={handleDisable} disabled={disabling} loading={disabling} />
           </div>
@@ -636,135 +516,42 @@ function SlackPanel({ workspaceId, token }) {
             <button
               onClick={handleConnect}
               disabled={connecting}
-              className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-slate-700 disabled:opacity-60"
+              className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-xs font-semibold text-white shadow-2xs transition-colors hover:bg-slate-800 disabled:opacity-60"
             >
               {connecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <SlackIcon />}
               Connect Slack
             </button>
           </div>
         ) : (
-          <div className="space-y-4">
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-              <p>
-                <span className="font-medium text-slate-900">Workspace:</span>{' '}
-                {teamName || '—'}
-              </p>
-              {status?.authError && (
-                <p className="mt-1 font-medium text-rose-600">
-                  <span className="font-semibold text-slate-900">Authorization:</span>{' '}
-                  {status.authError}
-                </p>
-              )}
+          <div className="space-y-3">
+            <div className="rounded-xl border border-slate-200/80 bg-slate-50/50 p-3.5 text-xs">
+              <span className="font-semibold text-slate-700">Connected Workspace:</span>{' '}
+              <span className="font-bold text-slate-900">{teamName || '—'}</span>
             </div>
 
+            {status?.authError && (
+              <p className="text-xs font-medium text-rose-600">
+                Authorization warning: {status.authError}
+              </p>
+            )}
+
             {status && status.scopesHealthy === false && (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
-                <p className="text-sm font-semibold text-amber-800">
-                  Permissions need updating.
-                </p>
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3.5">
+                <p className="text-xs font-bold text-amber-800">Permissions need updating.</p>
                 <p className="mt-0.5 text-xs text-amber-700">
-                  Missing: {status.missingScopes?.join(', ') || 'unknown'}. Reconnect Slack to
-                  grant the required scopes.
+                  Missing: {status.missingScopes?.join(', ') || 'unknown'}. Reconnect Slack to grant scopes.
                 </p>
                 <button
                   type="button"
                   onClick={handleConnect}
                   disabled={connecting}
-                  className="mt-2 inline-flex items-center gap-2 rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-amber-700 disabled:opacity-60"
+                  className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-amber-700 disabled:opacity-60"
                 >
-                  {connecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <SlackIcon />}
+                  {connecting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <SlackIcon />}
                   Reconnect Slack
                 </button>
               </div>
             )}
-
-            <div className="rounded-lg border border-slate-200">
-              <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-                <div>
-                  <h4 className="text-sm font-semibold text-slate-900">
-                    Conversations ({conversations.length})
-                  </h4>
-                  {status?.conversationCount !== undefined && (
-                    <p className="text-xs text-slate-500">
-                      {status.syncedConversationCount} synced · {status.messageCount} messages
-                    </p>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={loadConversations}
-                    disabled={convLoading}
-                    className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-60"
-                  >
-                    {convLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Refresh list'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleSync}
-                    disabled={syncing}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-indigo-700 disabled:opacity-60"
-                  >
-                    {syncing && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                    {syncing ? 'Syncing…' : 'Sync Now'}
-                  </button>
-                </div>
-              </div>
-
-              {syncResult && (
-                <div
-                  role={syncResult.ok ? 'status' : 'alert'}
-                  className={`border-b border-slate-100 px-4 py-2.5 text-xs font-medium ${syncResult.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
-                    }`}
-                >
-                  {syncResult.ok ? '✓ Sync complete. ' : '⚠ Sync partially failed. '}
-                  {syncResult.message}
-                </div>
-              )}
-
-              <div className="max-h-72 divide-y divide-slate-100 overflow-y-auto">
-                {conversations.length === 0 && (
-                  <p className="px-4 py-6 text-center text-sm text-slate-400">
-                    No conversations discovered yet. Click Sync Now after connecting.
-                  </p>
-                )}
-                {conversations.map((c) => (
-                  <div key={c.id} className="flex items-center justify-between gap-3 px-4 py-2.5">
-                    <a
-                      href={`/workspace/${workspaceId}/channels/${c.id}`}
-                      className="min-w-0 truncate text-sm font-medium text-slate-800 hover:text-indigo-600"
-                    >
-                      {c.conversationType === 'PUBLIC_CHANNEL' || c.conversationType === 'PRIVATE_CHANNEL'
-                        ? `# ${c.name || c.id}`
-                        : c.name || c.id}
-                    </a>
-                    {syncChip(c)}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {testResult && (
-              <div
-                role={testResult.ok ? 'status' : 'alert'}
-                className={`rounded-lg border px-4 py-3 text-sm font-medium ${testResult.ok
-                  ? 'border-emerald-100 bg-emerald-50 text-emerald-800'
-                  : 'border-rose-200 bg-rose-50 text-rose-700'
-                  }`}
-              >
-                {testResult.ok ? '✓ ' : ''}
-                {testResult.message}
-              </div>
-            )}
-
-            <button
-              onClick={handleTestMessage}
-              disabled={testing}
-              className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700 disabled:opacity-60"
-            >
-              {testing && <Loader2 className="h-4 w-4 animate-spin" />}
-              Send Test Message
-            </button>
           </div>
         )
       }
@@ -988,9 +775,11 @@ function JiraPanel({ workspaceId, token }) {
     }
   };
 
+  const [showDetails, setShowDetails] = useState(false);
+
   const badge = isConnected
     ? (
-      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-sm font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
+      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
         <Check className="h-3 w-3" /> Connected
       </span>
     )
@@ -999,16 +788,24 @@ function JiraPanel({ workspaceId, token }) {
   return (
     <IntegrationCard
       icon={<JiraIcon />}
-      title="Jira Cloud"
+      title="Jira"
       description="Sync Jira issues, track project progress, and receive real-time updates via webhooks."
       badge={badge}
       topActions={
         isConnected ? (
-          <div className="flex flex-col items-end gap-2">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowDetails(!showDetails)}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-50 transition-colors"
+            >
+              {showDetails ? <ChevronUp className="h-3.5 w-3.5 text-slate-400" /> : <ChevronDown className="h-3.5 w-3.5 text-slate-400" />}
+              <span>{showDetails ? 'Hide Settings' : 'Manage Sync'}</span>
+            </button>
             {disableMsg && (
               <div
                 role={disableMsg.ok ? 'status' : 'alert'}
-                className={`rounded-lg border px-3 py-2 text-sm font-medium ${disableMsg.ok
+                className={`rounded-lg border px-3 py-1.5 text-xs font-medium ${disableMsg.ok
                     ? 'border-emerald-100 bg-emerald-50 text-emerald-800'
                     : 'border-rose-200 bg-rose-50 text-rose-700'
                   }`}
@@ -1025,28 +822,22 @@ function JiraPanel({ workspaceId, token }) {
         ) : undefined
       }
       action={
-        <div className="space-y-6">
-          {/* Connection Status / Connect Button */}
-          {statusLoading ? (
-            <div className="flex justify-center py-6">
-              <Loader2 className="h-6 w-6 animate-spin text-slate-300" />
-            </div>
-          ) : !isConnected ? (
-            <div className="space-y-3">
-              {connectError && <p className="text-sm text-rose-600">{connectError}</p>}
-              <button
-                onClick={handleConnect}
-                disabled={connecting}
-                className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-slate-700 disabled:opacity-60"
-              >
-                {connecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <JiraIcon />}
-                Connect Jira Cloud
-              </button>
-              <p className="text-xs text-slate-500">
-                You&apos;ll be redirected to Atlassian to authorize PulseOps. Required scopes: read:jira-work, read:jira-user, manage:jira-webhook.
-              </p>
-            </div>
-          ) : (
+        !isConnected ? (
+          <div className="space-y-3">
+            {connectError && <p className="text-sm text-rose-600">{connectError}</p>}
+            <button
+              onClick={handleConnect}
+              disabled={connecting}
+              className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-xs font-semibold text-white shadow-2xs transition-colors hover:bg-slate-800 disabled:opacity-60"
+            >
+              {connecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <JiraIcon />}
+              Connect Jira
+            </button>
+            <p className="text-xs text-slate-500">
+              You&apos;ll be redirected to Atlassian to authorize PulseOps.
+            </p>
+          </div>
+        ) : showDetails ? (
             <>
               {/* Connected Info */}
               <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 space-y-2">
@@ -1191,8 +982,7 @@ function JiraPanel({ workspaceId, token }) {
 
 
             </>
-          )}
-        </div>
+        ) : null
       }
     />
   );
@@ -1208,10 +998,10 @@ export default function IntegrationsPage({ params }) {
     (typeof window !== 'undefined' ? localStorage.getItem('pulseops_token') : null);
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8">
+    <div className="max-w-7xl mx-auto space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-slate-900">Integrations</h1>
-        <p className="mt-2 text-sm text-slate-500">
+        <p className="mt-1 text-sm text-slate-500">
           Connect third-party tools to automate your engineering workflow.
         </p>
       </div>

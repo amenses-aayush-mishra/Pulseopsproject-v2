@@ -113,97 +113,104 @@ export default function InvitationLandingPage() {
   };
 
   return (
-    <AuthShell
-      eyebrow="INVITATION SECURITY"
-      title={mustChange ? 'Set your password.' : 'Change password.'}
-      subtitle={
-        mustChange
-          ? 'Your account was provisioned with a temporary password. Set a new password to continue into the workspace.'
-          : 'Update the password you use to sign in to this workspace.'
-      }
-    >
-      <form onSubmit={onSubmit} className="space-y-4" noValidate>
-        <div className="relative">
-          <input
-            id="invitation-current-password"
-            type="password"
-            name="currentPassword"
-            value={currentPassword}
-            onChange={(e) => setCurrentPassword(e.target.value)}
-            required
-            autoComplete="current-password"
-            placeholder=" "
-            className={FLOAT_INPUT}
-          />
-          <label htmlFor="invitation-current-password" className={FLOAT_LABEL}>
-            Current Password
-          </label>
-        </div>
+    <div className="max-w-xl mx-auto space-y-6 pt-4">
+      {/* Header */}
+      <div className="text-center space-y-1.5">
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+          {mustChange ? 'Set your password.' : 'Invitation & Security'}
+        </h1>
+        <p className="text-sm text-slate-500 max-w-md mx-auto">
+          {mustChange
+            ? 'Your account was provisioned with a temporary password. Set a new password to continue into the workspace.'
+            : 'Update the security password associated with your account for this workspace.'}
+        </p>
+      </div>
 
-        <div className="relative">
-          <input
-            id="invitation-new-password"
-            type="password"
-            name="newPassword"
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-            required
-            minLength={8}
-            autoComplete="new-password"
-            placeholder=" "
-            className={FLOAT_INPUT}
-          />
-          <label htmlFor="invitation-new-password" className={FLOAT_LABEL}>
-            New Password
-          </label>
-        </div>
-
-        <div>
+      {/* Card Form */}
+      <div className="rounded-2xl border border-slate-200/80 bg-white p-6 sm:p-8 shadow-2xs">
+        <form onSubmit={onSubmit} className="space-y-4.5" noValidate>
           <div className="relative">
             <input
-              id="invitation-confirm-password"
+              id="invitation-current-password"
               type="password"
-              name="confirmPassword"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
+              name="currentPassword"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              required
+              autoComplete="current-password"
+              placeholder=" "
+              className={FLOAT_INPUT}
+            />
+            <label htmlFor="invitation-current-password" className={FLOAT_LABEL}>
+              Current Password
+            </label>
+          </div>
+
+          <div className="relative">
+            <input
+              id="invitation-new-password"
+              type="password"
+              name="newPassword"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
               required
               minLength={8}
               autoComplete="new-password"
               placeholder=" "
               className={FLOAT_INPUT}
             />
-            <label htmlFor="invitation-confirm-password" className={FLOAT_LABEL}>
-              Confirm New Password
+            <label htmlFor="invitation-new-password" className={FLOAT_LABEL}>
+              New Password
             </label>
           </div>
-          <p className="mt-1 text-[11px] text-slate-400">At least 8 characters.</p>
-        </div>
 
-        {error && (
-          <div
-            role="alert"
-            className="rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-3 text-xs sm:text-sm text-rose-800"
-          >
-            {error}
+          <div>
+            <div className="relative">
+              <input
+                id="invitation-confirm-password"
+                type="password"
+                name="confirmPassword"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+                minLength={8}
+                autoComplete="new-password"
+                placeholder=" "
+                className={FLOAT_INPUT}
+              />
+              <label htmlFor="invitation-confirm-password" className={FLOAT_LABEL}>
+                Confirm New Password
+              </label>
+            </div>
+            <p className="mt-1.5 text-xs text-slate-500 font-medium">At least 8 characters.</p>
           </div>
-        )}
-        {success && (
-          <div
-            role="status"
-            className="rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-3 text-xs sm:text-sm text-emerald-900"
-          >
-            ✓ {success}
-          </div>
-        )}
 
-        <button
-          type="submit"
-          disabled={busy}
-          className="w-full rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-sm px-4 py-3 transition-all shadow-sm disabled:opacity-60 disabled:cursor-not-allowed mt-2"
-        >
-          {busy ? 'Updating…' : 'Update Password'}
-        </button>
-      </form>
-    </AuthShell>
+          {error && (
+            <div
+              role="alert"
+              className="rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-3 text-xs sm:text-sm text-rose-800"
+            >
+              {error}
+            </div>
+          )}
+          {success && (
+            <div
+              role="status"
+              className="rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-3 text-xs sm:text-sm text-emerald-900"
+            >
+              ✓ {success}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={busy}
+            className="w-full rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-sm px-4 py-3 transition-all shadow-2xs disabled:opacity-60 disabled:cursor-not-allowed mt-2"
+          >
+            {busy ? 'Updating…' : 'Update Password'}
+          </button>
+        </form>
+      </div>
+    </div>
   );
 }

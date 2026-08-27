@@ -10,7 +10,7 @@ export default function TasksPage() {
   const workspaceId = params?.workspaceId || session?.user?.activeOrganizationId;
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
+    <div className="max-w-7xl mx-auto space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-slate-900">Tasks</h1>
         <p className="mt-1 text-sm text-slate-500">

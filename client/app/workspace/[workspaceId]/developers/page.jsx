@@ -36,7 +36,7 @@ export default function DevelopersPage() {
   );
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6 p-6">
+    <div className="max-w-7xl mx-auto space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">Developer Health & Activity</h1>
@@ -95,20 +95,20 @@ export default function DevelopersPage() {
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-slate-100 text-sm">
               <thead>
-                <tr className="bg-slate-50/70 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">
-                  <th className="px-5 py-3.5">Developer</th>
-                  <th className="px-5 py-3.5">Health Status</th>
-                  <th className="px-5 py-3.5">Total Events</th>
-                  <th className="px-5 py-3.5">PRs Merged</th>
-                  <th className="px-5 py-3.5">PRs Opened</th>
-                  <th className="px-5 py-3.5">Issues Done</th>
-                  <th className="px-5 py-3.5">Last Active</th>
+                <tr className="bg-slate-50/70 text-left text-xs font-bold uppercase tracking-wider text-slate-500">
+                  <th className="px-6 py-4">Developer</th>
+                  <th className="px-6 py-4">Health Status</th>
+                  <th className="px-6 py-4">Total Events</th>
+                  <th className="px-6 py-4">PRs Merged</th>
+                  <th className="px-6 py-4">PRs Opened</th>
+                  <th className="px-6 py-4">Issues Done</th>
+                  <th className="px-6 py-4">Last Active</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 bg-white">
                 {filtered.map((d) => (
                   <tr key={d.actor} className="transition hover:bg-slate-50/60">
-                    <td className="px-5 py-4">
+                    <td className="px-6 py-4.5">
                       <div className="flex items-center gap-3">
                         <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-xs font-bold uppercase text-white shadow-sm">
                           {String(d.actor).charAt(0)}

@@ -26,7 +26,7 @@ export default function TicketsPage() {
   const jiraTeam = (data?.team || []).filter((m) => (m.issuesCompleted || 0) > 0);
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8 p-6">
+    <div className="max-w-7xl mx-auto space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-slate-900">Tickets & Tasks</h1>
         <p className="mt-1 text-sm text-slate-500">Jira issue flow and active task list.</p>
@@ -42,17 +42,17 @@ export default function TicketsPage() {
       {!isLoading && !isError && (
         <>
           <dl className="grid gap-4 sm:grid-cols-3">
-            <div className="rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm backdrop-blur-xl">
-              <dt className="text-xs font-medium uppercase tracking-wide text-slate-400">Issues Created</dt>
-              <dd className="mt-1.5 text-3xl font-bold text-slate-900">{totals.jiraCreated ?? 0}</dd>
+            <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs">
+              <dt className="text-xs font-bold uppercase tracking-wider text-slate-400">Issues Created</dt>
+              <dd className="mt-1 text-3xl font-extrabold text-slate-900">{totals.jiraCreated ?? 0}</dd>
             </div>
-            <div className="rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm backdrop-blur-xl">
-              <dt className="text-xs font-medium uppercase tracking-wide text-slate-400">Issues Completed</dt>
-              <dd className="mt-1.5 text-3xl font-bold text-emerald-600">{totals.jiraCompleted ?? 0}</dd>
+            <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs">
+              <dt className="text-xs font-bold uppercase tracking-wider text-slate-400">Issues Completed</dt>
+              <dd className="mt-1 text-3xl font-extrabold text-emerald-600">{totals.jiraCompleted ?? 0}</dd>
             </div>
-            <div className="rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm backdrop-blur-xl">
-              <dt className="text-xs font-medium uppercase tracking-wide text-slate-400">Net Backlog</dt>
-              <dd className={`mt-1.5 text-3xl font-bold ${(totals.jiraCreated - totals.jiraCompleted) > 0 ? 'text-amber-600' : 'text-slate-900'}`}>
+            <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-2xs">
+              <dt className="text-xs font-bold uppercase tracking-wider text-slate-400">Net Backlog</dt>
+              <dd className={`mt-1 text-3xl font-extrabold ${(totals.jiraCreated - totals.jiraCompleted) > 0 ? 'text-amber-600' : 'text-slate-900'}`}>
                 {(totals.jiraCreated ?? 0) - (totals.jiraCompleted ?? 0)}
               </dd>
             </div>

@@ -357,23 +357,18 @@ function SlackFileAttachment({ file, token, workspaceId }) {
 function MessageRow({ message, onOpenThread, token, workspaceId }) {
   const hasThread = Number(message.replyCount) > 0;
   return (
-    <div className="group flex gap-3 px-4 py-3 transition-colors hover:bg-slate-50">
+    <div className="group flex gap-3.5 px-5 py-4 transition-colors hover:bg-slate-50/80">
       <Avatar name={message.userName} url={message.userAvatar} />
 
       <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-          <span className="text-[13px] font-semibold text-slate-900">{message.userName}</span>
-          <span className="text-[11px] text-slate-400">
+        <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
+          <span className="text-sm font-semibold text-slate-900">{message.userName}</span>
+          <span className="text-xs text-slate-400">
             {formatDay(message.ts)} · {formatClock(message.ts)}
           </span>
         </div>
 
-        <p className="mt-0.5 whitespace-pre-wrap break-words text-[13px] leading-relaxed text-slate-600">
-          {message.bot && (
-            <span className="mr-1 inline-flex rounded bg-slate-200 px-1 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600">
-              bot
-            </span>
-          )}
+        <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-700">
           {renderText(message.text)}
         </p>
 
@@ -589,11 +584,11 @@ export default function CommunicationPage({ params }) {
 
 
   const connected = Boolean(data?.connected);
-  const messages = Array.isArray(data?.messages) ? data.messages : [];
+  const messages = (Array.isArray(data?.messages) ? data.messages : []).filter((m) => !m.bot);
   const channelLabel = data?.channelName ? `#${data.channelName.replace(/^#/, '')}` : null;
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
+    <div className="mx-auto max-w-7xl space-y-6">
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>

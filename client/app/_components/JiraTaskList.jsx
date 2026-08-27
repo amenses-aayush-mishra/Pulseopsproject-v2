@@ -225,10 +225,10 @@ export default function JiraTaskList({ workspaceId }) {
           {filteredIssues.map((issue) => (
             <div
               key={issue.jiraIssueId || issue._id || issue.issueKey}
-              className="p-5 transition hover:bg-slate-50/70 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
+              className="p-5 sm:p-6 transition hover:bg-slate-50/70 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
             >
-              <div className="space-y-1.5 min-w-0 flex-1">
-                <div className="flex items-center gap-2 flex-wrap">
+              <div className="space-y-2 min-w-0 flex-1">
+                <div className="flex items-center gap-2.5 flex-wrap">
                   {siteUrl ? (
                     <a
                       href={`${siteUrl.replace(/\/$/, '')}/browse/${issue.issueKey}`}
@@ -237,7 +237,7 @@ export default function JiraTaskList({ workspaceId }) {
                       className="inline-flex items-center gap-1 font-mono text-xs font-bold text-indigo-600 hover:underline"
                     >
                       {issue.issueKey}
-                      <ExternalLink className="h-3 w-3" />
+                      <ExternalLink className="h-3.5 w-3.5" />
                     </a>
                   ) : (
                     <span className="font-mono text-xs font-bold text-indigo-600">
@@ -246,7 +246,7 @@ export default function JiraTaskList({ workspaceId }) {
                   )}
 
                   <span
-                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${getStatusBadgeClass(
+                    className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset ${getStatusBadgeClass(
                       issue.status
                     )}`}
                   >
@@ -254,13 +254,13 @@ export default function JiraTaskList({ workspaceId }) {
                   </span>
 
                   {issue.issueType && (
-                    <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                    <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">
                       {issue.issueType}
                     </span>
                   )}
 
                   {issue.priority && (
-                    <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 border border-amber-200/60">
+                    <span className="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700 border border-amber-200/60">
                       {issue.priority}
                     </span>
                   )}
@@ -272,26 +272,26 @@ export default function JiraTaskList({ workspaceId }) {
                   )}
                 </div>
 
-                <h4 className="text-sm font-semibold text-slate-900 truncate">
+                <h4 className="text-base font-semibold text-slate-900 truncate">
                   {issue.summary || 'No summary'}
                 </h4>
 
-                <div className="flex items-center gap-4 text-xs text-slate-500 flex-wrap pt-1">
+                <div className="flex items-center gap-4 text-xs text-slate-500 flex-wrap pt-0.5">
                   {issue.assignee && (
-                    <span className="flex items-center gap-1 text-slate-600">
+                    <span className="flex items-center gap-1.5 text-slate-600 font-medium">
                       <User className="h-3.5 w-3.5 text-slate-400" />
                       Assignee: {issue.assignee.displayName || issue.assignee.name || 'Unassigned'}
                     </span>
                   )}
 
                   {issue.reporter && (
-                    <span className="flex items-center gap-1 text-slate-500">
+                    <span className="flex items-center gap-1.5 text-slate-500">
                       Reporter: {issue.reporter.displayName || issue.reporter.name}
                     </span>
                   )}
 
                   {issue.updated && (
-                    <span className="flex items-center gap-1 text-slate-400">
+                    <span className="flex items-center gap-1.5 text-slate-400">
                       <Calendar className="h-3.5 w-3.5" />
                       Updated: {formatDate(issue.updated)}
                     </span>

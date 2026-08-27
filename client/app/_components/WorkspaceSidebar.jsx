@@ -32,7 +32,7 @@ export default function WorkspaceSidebar({ workspaceId, role }) {
     { href: `${base}/tasks`, label: 'Tasks', icon: ListTodo },
     { href: `${base}/tickets`, label: 'Tickets', icon: Ticket },
     { href: `${base}/integrations`, label: 'Integrations', icon: Puzzle },
-    { href: `${base}/invitation`, label: 'Invitation & Password', icon: Key },
+    { href: `${base}/invitation`, label: 'Security', icon: Key },
   ];
 
   const isActive = (item) =>
@@ -67,17 +67,15 @@ export default function WorkspaceSidebar({ workspaceId, role }) {
               href={item.href}
               aria-current={active ? 'page' : undefined}
               title={item.label}
-              className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all ${
-                active
+              className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all ${active
                   ? 'bg-indigo-50 text-indigo-700 font-bold shadow-2xs'
                   : 'text-slate-600 hover:bg-slate-100/70 hover:text-slate-900'
-              }`}
+                }`}
             >
               {Icon && (
                 <Icon
-                  className={`h-4 w-4 shrink-0 transition-colors ${
-                    active ? 'text-indigo-600' : 'text-slate-400 group-hover:text-slate-600'
-                  }`}
+                  className={`h-4 w-4 shrink-0 transition-colors ${active ? 'text-indigo-600' : 'text-slate-400 group-hover:text-slate-600'
+                    }`}
                 />
               )}
               <span className="hidden md:inline-block truncate">{item.label}</span>
