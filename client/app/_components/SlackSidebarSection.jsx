@@ -80,18 +80,20 @@ export default function SlackSidebarSection({ workspaceId }) {
     return (
       <Link
         href={href}
-        className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-[13px] font-medium transition-colors ${
-          active ? 'bg-white/10 text-white' : 'text-slate-400 hover:bg-white/5 hover:text-white'
+        className={`flex items-center gap-2 rounded-xl px-3 py-2 text-[13px] font-medium transition-all ${
+          active
+            ? 'bg-indigo-50 text-indigo-700 font-bold'
+            : 'text-slate-600 hover:bg-slate-100/70 hover:text-slate-900'
         }`}
       >
         {isDm ? (
-          <MessageSquare className="h-3.5 w-3.5 shrink-0 text-slate-500" />
+          <MessageSquare className="h-3.5 w-3.5 shrink-0 text-slate-400" />
         ) : isGroupDm ? (
-          <Users className="h-3.5 w-3.5 shrink-0 text-slate-500" />
+          <Users className="h-3.5 w-3.5 shrink-0 text-slate-400" />
         ) : conversation.isPrivate || conversation.conversationType === 'PRIVATE_CHANNEL' ? (
-          <Lock className="h-3.5 w-3.5 shrink-0 text-slate-500" />
+          <Lock className="h-3.5 w-3.5 shrink-0 text-slate-400" />
         ) : (
-          <Hash className="h-3.5 w-3.5 shrink-0 text-slate-500" />
+          <Hash className="h-3.5 w-3.5 shrink-0 text-slate-400" />
         )}
         <span className="truncate">
           {isDm || isGroupDm
@@ -105,8 +107,8 @@ export default function SlackSidebarSection({ workspaceId }) {
   const section = (label, list) => {
     if (!list || list.length === 0) return null;
     return (
-      <div className="mt-4">
-        <p className="px-3 text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+      <div className="mt-3">
+        <p className="px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400">
           {label}
         </p>
         <div className="mt-1 space-y-0.5">
@@ -128,13 +130,13 @@ export default function SlackSidebarSection({ workspaceId }) {
   if (!hasAnything) return null;
 
   return (
-    <div className="mt-4">
+    <div className="mt-4 pt-3 border-t border-slate-100">
       <div className="flex items-center justify-between px-3">
-        <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">Slack</p>
+        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Slack</p>
         <button
           type="button"
           onClick={load}
-          className="rounded p-1 text-slate-500 transition-colors hover:bg-white/5 hover:text-white"
+          className="rounded p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
           aria-label="Refresh Slack conversations"
         >
           <RefreshCw className="h-3 w-3" />

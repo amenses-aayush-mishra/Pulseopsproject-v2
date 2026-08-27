@@ -1,827 +1,578 @@
-import { useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+'use client';
 
-import { signOut, useSession } from 'next-auth/react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useSession } from 'next-auth/react';
 import {
   GitBranch,
   MessageSquare,
+  Users,
   Shield,
-  Layers,
-  Check,
-  Plus,
-  ArrowRight,
-  ChevronRight,
-  LogOut,
   Activity,
   Zap,
-  Lock,
-  User,
-  ListTodo,
-  Settings,
-  SlidersHorizontal,
   FolderKanban,
   FileText,
   BarChart,
-  Users,
-  Puzzle
+  Puzzle,
+  ArrowUpRight,
+  RefreshCw,
+  AlertTriangle,
+  CheckCircle2,
+  XCircle,
+  ExternalLink,
+  ListTodo,
+  Ticket,
 } from 'lucide-react';
+import { fetchDashboard } from './analyticsApi';
 
 const API_BASE = process.env.NEXT_PUBLIC_EXPRESS_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 const ME_ENDPOINT = `${API_BASE}/api/auth/me`;
-const SWITCH_ENDPOINT = `${API_BASE}/api/organizations/switch-org`;
-const INVITE_ENDPOINT = `${API_BASE}/api/organizations/invite`;
 const REPOS_ENDPOINT = `${API_BASE}/api/organizations/repositories`;
 const SLACK_CHANNELS_ENDPOINT = `${API_BASE}/api/slack/channels`;
-
-const INVITE_ROLES = [
-  { value: 'developer', label: 'Developer' },
-  { value: 'maintainer', label: 'Maintainer' },
-  { value: 'admin', label: 'Admin' },
-  { value: 'viewer', label: 'Viewer' },
-];
+const MEMBERS_ENDPOINT = `${API_BASE}/api/organizations/members`;
+const GITHUB_STATUS_ENDPOINT = `${API_BASE}/api/integrations/github/status`;
+const SLACK_STATUS_ENDPOINT = `${API_BASE}/api/integrations/slack/status`;
+const JIRA_STATUS_ENDPOINT = `${API_BASE}/api/integrations/jira/status`;
 
 export default function WorkspaceDashboard() {
-  const { data: session, status, update } = useSession();
-  const router = useRouter();
-
-  const [me, setMe] = useState(null);
-  const [meError, setMeError] = useState(null);
-  const [repositories, setRepositories] = useState([]);
-  const [reposLoading, setReposLoading] = useState(true);
-  const [slackChannels, setSlackChannels] = useState([]);
-  const [slackLoading, setSlackLoading] = useState(true);
-
-  const [switching, setSwitching] = useState(false);
-  const [showSwitcher, setShowSwitcher] = useState(false);
-  const [showProfileMenu, setShowProfileMenu] = useState(false);
-  const [switchError, setSwitchError] = useState(null);
-
-  // Invite modal state
-  const [showInvite, setShowInvite] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState('developer');
-  const [inviteBusy, setInviteBusy] = useState(false);
-  const [inviteError, setInviteError] = useState(null);
-  const [inviteSuccess, setInviteSuccess] = useState(null);
-
+  const { data: session, status } = useSession();
   const activeOrganizationId = session?.user?.activeOrganizationId || null;
-  const role = session?.user?.role || null;
-  const userEmail = session?.user?.email || '—';
-  const userName = session?.user?.name || userEmail.split('@')[0];
+  const workspaceId = activeOrganizationId;
 
-  // Load user profile & organizations
+  // Real Data States
+  const [loading, setLoading] = useState(true);
+  const [me, setMe] = useState(null);
+  const [repositories, setRepositories] = useState([]);
+  const [slackChannels, setSlackChannels] = useState([]);
+  const [members, setMembers] = useState([]);
+  const [analytics, setAnalytics] = useState(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(true);
+  const [analyticsError, setAnalyticsError] = useState(null);
+
+  // Real Integration Statuses
+  const [githubStatus, setGithubStatus] = useState({ connected: false, loading: true });
+  const [slackStatus, setSlackStatus] = useState({ connected: false, loading: true });
+  const [jiraStatus, setJiraStatus] = useState({ connected: false, loading: true });
+
+  // Fetch all real data in parallel
   useEffect(() => {
     let cancelled = false;
     const storedToken = typeof window !== 'undefined' ? localStorage.getItem('pulseops_token') : null;
     const bearer = session?.accessToken || storedToken;
-    if (!bearer) return undefined;
+    if (!bearer || !workspaceId) return undefined;
 
-    (async () => {
-      try {
-        const res = await fetch(ME_ENDPOINT, {
-          headers: { Authorization: `Bearer ${bearer.trim()}` },
-        });
-        const data = await res.json().catch(() => ({}));
-        if (cancelled) return;
-        if (res.ok) {
-          setMe(data);
-        } else {
-          setMeError(data?.message || `Could not load workspace context (${res.status}).`);
-        }
-      } catch {
-        if (!cancelled) setMeError('Could not reach the workspace service.');
-      }
-    })();
+    setLoading(true);
+    setAnalyticsLoading(true);
 
-    return () => {
-      cancelled = true;
+    const headers = {
+      Authorization: `Bearer ${bearer.trim()}`,
+      'x-organization-id': workspaceId,
     };
-  }, [status, session?.accessToken]);
 
-  // Load Repositories overview count
-  useEffect(() => {
-    let cancelled = false;
-    const storedToken = typeof window !== 'undefined' ? localStorage.getItem('pulseops_token') : null;
-    const bearer = session?.accessToken || storedToken;
+    // 1. Fetch User / Org Me Data
+    fetch(ME_ENDPOINT, { headers })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!cancelled && d) setMe(d);
+      })
+      .catch(() => {});
 
-    (async () => {
-      setReposLoading(true);
-      try {
-        const res = await fetch(REPOS_ENDPOINT, {
-          headers: {
-            ...(bearer ? { Authorization: `Bearer ${bearer.trim()}` } : {}),
-          },
-        });
-        const data = await res.json().catch(() => ({}));
-        if (cancelled) return;
-        if (res.ok && Array.isArray(data)) {
-          setRepositories(data);
-        } else if (res.ok && Array.isArray(data?.repositories)) {
-          setRepositories(data.repositories);
-        } else {
-          setRepositories([]);
+    // 2. Fetch Connected Repositories
+    fetch(REPOS_ENDPOINT, { headers })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!cancelled) {
+          if (Array.isArray(d)) setRepositories(d);
+          else if (Array.isArray(d?.repositories)) setRepositories(d.repositories);
+          else setRepositories([]);
         }
-      } catch {
+      })
+      .catch(() => {
         if (!cancelled) setRepositories([]);
-      } finally {
-        if (!cancelled) setReposLoading(false);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [session?.accessToken, activeOrganizationId]);
-
-  // Load Slack Channels summary
-  useEffect(() => {
-    let cancelled = false;
-    const storedToken = typeof window !== 'undefined' ? localStorage.getItem('pulseops_token') : null;
-    const bearer = session?.accessToken || storedToken;
-
-    (async () => {
-      setSlackLoading(true);
-      try {
-        const res = await fetch(SLACK_CHANNELS_ENDPOINT, {
-          headers: {
-            ...(bearer ? { Authorization: `Bearer ${bearer.trim()}` } : {}),
-          },
-        });
-        const data = await res.json().catch(() => ({}));
-        if (cancelled) return;
-        if (res.ok && Array.isArray(data?.channels)) {
-          setSlackChannels(data.channels);
-        } else {
-          setSlackChannels([]);
-        }
-      } catch {
-        if (!cancelled) setSlackChannels([]);
-      } finally {
-        if (!cancelled) setSlackLoading(false);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [session?.accessToken, activeOrganizationId]);
-
-  const onSwitchWorkspace = useCallback(
-    async (orgId, orgRole) => {
-      if (!orgId || orgId === activeOrganizationId) {
-        setShowSwitcher(false);
-        return;
-      }
-      setSwitching(true);
-      setSwitchError(null);
-      try {
-        let storedToken = null;
-        try {
-          storedToken = localStorage.getItem('pulseops_token');
-        } catch { }
-        const bearer = session?.accessToken || storedToken;
-
-        const res = await fetch(SWITCH_ENDPOINT, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(bearer ? { Authorization: `Bearer ${bearer.trim()}` } : {}),
-          },
-          body: JSON.stringify({ targetOrganizationId: orgId }),
-        });
-        const data = await res.json().catch(() => ({}));
-
-        if (res.status === 403) {
-          setSwitchError(data?.message || 'Forbidden. You are not an active member of this organization.');
-          return;
-        }
-        if (!res.ok) {
-          setSwitchError(data?.message || `Could not switch workspace (${res.status}).`);
-          return;
-        }
-
-        if (data.token) {
-          try {
-            localStorage.setItem('pulseops_token', data.token);
-          } catch { }
-        }
-
-        await update({
-          accessToken: data.token,
-          activeOrganizationId: data.activeOrganizationId || orgId,
-          role: data.role || orgRole,
-        });
-
-        setShowSwitcher(false);
-        router.refresh();
-      } catch {
-        setSwitchError('Could not reach the workspace server. Please try again.');
-      } finally {
-        setSwitching(false);
-      }
-    },
-    [activeOrganizationId, session?.accessToken, update, router]
-  );
-
-  const onSignOut = async () => {
-    try {
-      localStorage.removeItem('pulseops_token');
-      sessionStorage.clear();
-    } catch { }
-    await signOut({ callbackUrl: '/login' });
-  };
-
-  const onInvite = async (e) => {
-    e.preventDefault();
-    setInviteError(null);
-    setInviteSuccess(null);
-    if (inviteBusy) return;
-    const email = inviteEmail.trim().toLowerCase();
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      setInviteError('Enter a valid email address.');
-      return;
-    }
-    setInviteBusy(true);
-    try {
-      let storedToken = null;
-      try {
-        storedToken = localStorage.getItem('pulseops_token');
-      } catch { }
-      const bearer = session?.accessToken || storedToken;
-      const res = await fetch(INVITE_ENDPOINT, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(bearer ? { Authorization: `Bearer ${bearer.trim()}` } : {}),
-        },
-        body: JSON.stringify({ email, role: inviteRole }),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setInviteError(data?.message || `Invitation failed (${res.status}).`);
-        return;
-      }
-      setInviteSuccess(`Invitation sent to ${email}.`);
-      setInviteEmail('');
-      setTimeout(() => setShowInvite(false), 900);
-    } catch {
-      setInviteError('Could not reach the invitation service. Please try again.');
-    } finally {
-      setInviteBusy(false);
-    }
-  };
+
+    // 3. Fetch Slack Channels
+    fetch(SLACK_CHANNELS_ENDPOINT, { headers })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!cancelled) {
+          if (Array.isArray(d?.channels)) setSlackChannels(d.channels);
+          else setSlackChannels([]);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setSlackChannels([]);
+      });
+
+    // 4. Fetch Members
+    fetch(MEMBERS_ENDPOINT, { headers })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!cancelled && Array.isArray(d?.members)) {
+          setMembers(d.members);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setMembers([]);
+      });
+
+    // 5. Fetch Real Analytics
+    fetchDashboard(workspaceId, 7, bearer)
+      .then((data) => {
+        if (!cancelled) {
+          setAnalytics(data);
+          setAnalyticsError(null);
+          setAnalyticsLoading(false);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setAnalytics(null);
+          setAnalyticsError(err?.message || 'Failed to load analytics.');
+          setAnalyticsLoading(false);
+        }
+      });
+
+    // 6. Fetch Integration Health Statuses
+    fetch(GITHUB_STATUS_ENDPOINT, { headers })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!cancelled) setGithubStatus({ connected: !!d?.connected, loading: false });
+      })
+      .catch(() => {
+        if (!cancelled) setGithubStatus({ connected: false, loading: false });
+      });
+
+    fetch(SLACK_STATUS_ENDPOINT, { headers })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!cancelled) setSlackStatus({ connected: !!d?.connected, loading: false });
+      })
+      .catch(() => {
+        if (!cancelled) setSlackStatus({ connected: false, loading: false });
+      });
+
+    fetch(JIRA_STATUS_ENDPOINT, { headers })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!cancelled) setJiraStatus({ connected: !!d?.connected, loading: false });
+      })
+      .catch(() => {
+        if (!cancelled) setJiraStatus({ connected: false, loading: false });
+      });
+
+    setLoading(false);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [workspaceId, session?.accessToken]);
+
+  const activeOrgName = me?.activeOrganization?.name || 'PulseOps Workspace';
+  const privateRepos = repositories.filter((r) => r.private).length;
+  const publicRepos = repositories.filter((r) => !r.private).length;
+
+  const totalEvents = analytics?.totals
+    ? (analytics.totals.prsMerged || 0) +
+      (analytics.totals.prsOpened || 0) +
+      (analytics.totals.pushes || 0) +
+      (analytics.totals.slackMessages || 0) +
+      (analytics.totals.jiraCreated || 0)
+    : 0;
+
+  const hasActivity = totalEvents > 0;
 
   if (status === 'loading') {
     return (
-      <div className="flex h-screen items-center justify-center bg-[#FAFAFC]">
+      <div className="flex h-96 items-center justify-center">
         <div className="flex items-center gap-3 rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm">
           <div className="h-5 w-5 animate-spin rounded-full border-2 border-indigo-200 border-t-indigo-600" />
-          <span className="text-sm font-semibold text-slate-700">Loading workspace…</span>
+          <span className="text-sm font-semibold text-slate-700">Loading workspace data…</span>
         </div>
       </div>
     );
   }
-
-  if (status === 'unauthenticated') {
-    return (
-      <div className="flex h-screen items-center justify-center bg-[#FAFAFC] p-6">
-        <div className="w-full max-w-md rounded-3xl border border-slate-200/80 bg-white p-8 text-center shadow-md">
-          <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Not signed in</h1>
-          <p className="mt-2 text-sm text-slate-500">Please sign in to access your PulseOps workspace.</p>
-          <a
-            href="/login"
-            className="mt-6 inline-flex w-full items-center justify-center rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-sm hover:bg-slate-800 transition-colors"
-          >
-            Sign in
-          </a>
-        </div>
-      </div>
-    );
-  }
-
-  const organizations = me?.availableOrganizations || [];
-  const activeName = me?.activeOrganization?.name || 'Primary Workspace';
-  const canInvite = role === 'owner' || role === 'admin';
-  const base = activeOrganizationId ? `/workspace/${activeOrganizationId}` : '';
-
-  const overviewCards = [
-    {
-      title: 'Projects & Workspaces',
-      description: 'Manage projects, switch workspace context, and inspect imported repositories.',
-      href: `${base}/projects`,
-      icon: FolderKanban,
-      color: 'from-blue-500 to-indigo-600',
-    },
-    {
-      title: 'Tasks',
-      description: 'View real Jira issues, track status, priority, assignees, and project progress.',
-      href: `${base}/tasks`,
-      icon: ListTodo,
-      color: 'from-indigo-500 to-purple-600',
-    },
-    {
-      title: 'Reports',
-      description: 'AI-generated engineering health summaries, executive reports, and recommendations.',
-      href: `${base}/reports`,
-      icon: FileText,
-      color: 'from-purple-500 to-pink-600',
-    },
-    {
-      title: 'Analytics',
-      description: 'Organization health score, KPI trends, risks & alerts, and source event distribution.',
-      href: `${base}/analytics`,
-      icon: BarChart,
-      color: 'from-emerald-500 to-teal-600',
-    },
-    {
-      title: 'Developers',
-      description: 'Per-developer health status, contribution metrics, and workload overview.',
-      href: `${base}/developers`,
-      icon: Users,
-      color: 'from-amber-500 to-orange-600',
-    },
-    {
-      title: 'Integrations',
-      description: 'Connect and configure Jira, GitHub, Slack, webhooks, and sync controls.',
-      href: `${base}/integrations`,
-      icon: Puzzle,
-      color: 'from-rose-500 to-red-600',
-    },
-  ];
 
   return (
-    <div className="h-screen bg-[#FAFAFC] text-slate-900 flex flex-col overflow-hidden selection:bg-indigo-100 selection:text-indigo-900">
+    <div className="space-y-6 max-w-7xl mx-auto">
+      {/* ------------ WELCOME HEADER ------------ */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200/80 pb-5">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+            {activeOrgName}
+          </h1>
+          <p className="text-sm text-slate-500 mt-1">
+            Real-time engineering activity, integration status, and team analytics.
+          </p>
+        </div>
 
-      {/* ---------------- 1. TOP BAR (Height ~56px) ---------------- */}
-      <header className="h-14 px-5 sm:px-8 bg-[#FAFAFC] border-b border-slate-200/80 flex items-center justify-between shrink-0">
-
-        {/* Left: PulseOps Wordmark + Workspace Switcher */}
-        <div className="flex items-center gap-3">
-          <Link href="/" className="flex items-center gap-2 group">
-            <div className="h-7 w-7 rounded-lg bg-slate-900 flex items-center justify-center text-white shadow-sm group-hover:scale-105 transition-transform">
-              <div className="flex items-center gap-0.5">
-                <span className="w-0.5 h-3 bg-white rounded-full"></span>
-                <span className="w-0.5 h-4 bg-white rounded-full"></span>
-                <span className="w-0.5 h-3 bg-white rounded-full"></span>
-              </div>
-            </div>
-            <span className="text-base font-bold text-slate-900 tracking-tight">PulseOps</span>
+        <div className="flex items-center gap-2">
+          <Link
+            href={`/workspace/${workspaceId}/repositories`}
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition-all shadow-sm"
+          >
+            <GitBranch className="w-4 h-4" />
+            <span>Connect Repo</span>
           </Link>
+          <Link
+            href={`/workspace/${workspaceId}/integrations`}
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold transition-all shadow-2xs"
+          >
+            <Puzzle className="w-4 h-4 text-indigo-600" />
+            <span>Integrations</span>
+          </Link>
+        </div>
+      </div>
 
-          <span className="text-slate-300 text-xs">/</span>
+      {/* ------------ 1. KEY METRICS ROW (PULLING FROM REAL DATA ONLY) ------------ */}
+      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Metric 1: Repositories */}
+        <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-2xs space-y-1">
+          <div className="flex items-center justify-between text-xs text-slate-500 font-semibold uppercase tracking-wider">
+            <span>Repositories</span>
+            <div className="p-2 rounded-lg bg-indigo-50 text-indigo-600">
+              <GitBranch className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="text-3xl font-extrabold text-slate-900 tracking-tight">
+            {repositories.length}
+          </div>
+          <p className="text-xs text-slate-500 truncate pt-1">
+            {repositories.length > 0
+              ? `${privateRepos} Private · ${publicRepos} Public`
+              : 'No repositories connected'}
+          </p>
+        </div>
 
-          {/* Workspace Switcher */}
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => {
-                setShowSwitcher((v) => !v);
-                setSwitchError(null);
-              }}
-              disabled={switching || !organizations.length}
-              className="flex items-center gap-2 px-2.5 py-1 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-800 hover:border-slate-300 transition-all shadow-2xs"
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block"></span>
-              <span className="max-w-[150px] truncate">{activeName}</span>
-              <span className="text-[10px] text-slate-400 font-normal">▼</span>
-            </button>
+        {/* Metric 2: Communication Channels */}
+        <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-2xs space-y-1">
+          <div className="flex items-center justify-between text-xs text-slate-500 font-semibold uppercase tracking-wider">
+            <span>Channels</span>
+            <div className="p-2 rounded-lg bg-emerald-50 text-emerald-600">
+              <MessageSquare className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="text-3xl font-extrabold text-slate-900 tracking-tight">
+            {slackChannels.length}
+          </div>
+          <p className="text-xs text-slate-500 truncate pt-1">
+            {slackChannels.length > 0 ? 'Slack integration active' : 'No channels connected'}
+          </p>
+        </div>
 
-            {showSwitcher && (
-              <div className="absolute left-0 mt-2 w-64 rounded-xl border border-slate-200 bg-white py-1.5 shadow-xl z-50">
-                <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100">
-                  Switch Workspace
+        {/* Metric 3: Team Roster */}
+        <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-2xs space-y-1">
+          <div className="flex items-center justify-between text-xs text-slate-500 font-semibold uppercase tracking-wider">
+            <span>Team Members</span>
+            <div className="p-2 rounded-lg bg-amber-50 text-amber-600">
+              <Users className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="text-3xl font-extrabold text-slate-900 tracking-tight">
+            {members.length || 1}
+          </div>
+          <p className="text-xs text-slate-500 truncate pt-1">
+            {members.length > 0 ? `${members.length} active member(s)` : '1 Active Member'}
+          </p>
+        </div>
+
+        {/* Metric 4: Org Health Score */}
+        <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-2xs space-y-1">
+          <div className="flex items-center justify-between text-xs text-slate-500 font-semibold uppercase tracking-wider">
+            <span>Health Score</span>
+            <div className="p-2 rounded-lg bg-purple-50 text-purple-600">
+              <Shield className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="text-3xl font-extrabold text-indigo-600 tracking-tight">
+            {analyticsLoading ? '…' : analytics?.healthScore ?? '—'}
+          </div>
+          <p className="text-xs text-slate-500 truncate pt-1">
+            {analytics?.healthLabel ? `Status: ${analytics.healthLabel}` : '7-day evaluation period'}
+          </p>
+        </div>
+      </section>
+
+      {/* ------------ 2. MAIN 2-COLUMN MATRIX ------------ */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+        {/* ------------ LEFT COLUMN (65% Width): Real Analytics & Events ------------ */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Panel 1: Activity Overview (Real Data / Honest Empty State) */}
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-2xs space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h2 className="text-base font-bold text-slate-900">Workspace Activity & Velocity</h2>
+                <p className="text-xs text-slate-500">
+                  Aggregated telemetry across commits, PRs, and Slack messages.
+                </p>
+              </div>
+              <span className="text-xs font-bold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full">
+                Last 7 Days
+              </span>
+            </div>
+
+            {analyticsLoading ? (
+              <div className="py-12 text-center text-sm text-slate-400">
+                <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-indigo-600" />
+                Computing workspace activity metrics…
+              </div>
+            ) : hasActivity ? (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  <div className="p-3.5 rounded-xl border border-slate-200/70 bg-slate-50/50 space-y-1">
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">PRs Merged</span>
+                    <p className="text-2xl font-extrabold text-slate-900">{analytics.totals.prsMerged || 0}</p>
+                  </div>
+                  <div className="p-3.5 rounded-xl border border-slate-200/70 bg-slate-50/50 space-y-1">
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">PRs Opened</span>
+                    <p className="text-2xl font-extrabold text-slate-900">{analytics.totals.prsOpened || 0}</p>
+                  </div>
+                  <div className="p-3.5 rounded-xl border border-slate-200/70 bg-slate-50/50 space-y-1">
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Pushes</span>
+                    <p className="text-2xl font-extrabold text-slate-900">{analytics.totals.pushes || 0}</p>
+                  </div>
+                  <div className="p-3.5 rounded-xl border border-slate-200/70 bg-slate-50/50 space-y-1">
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Slack Messages</span>
+                    <p className="text-2xl font-extrabold text-slate-900">{analytics.totals.slackMessages || 0}</p>
+                  </div>
+                  <div className="p-3.5 rounded-xl border border-slate-200/70 bg-slate-50/50 space-y-1">
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Active Devs</span>
+                    <p className="text-2xl font-extrabold text-slate-900">{analytics.totals.activeDevelopers || 0}</p>
+                  </div>
+                  <div className="p-3.5 rounded-xl border border-slate-200/70 bg-slate-50/50 space-y-1">
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Jira Issues</span>
+                    <p className="text-2xl font-extrabold text-slate-900">{analytics.totals.jiraCreated || 0}</p>
+                  </div>
                 </div>
-                <div className="max-h-40 overflow-y-auto">
-                  {organizations.map((org) => {
-                    const selected = org.id === activeOrganizationId;
-                    return (
-                      <button
-                        key={org.id}
-                        type="button"
-                        disabled={switching}
-                        onClick={() => onSwitchWorkspace(org.id, org.role)}
-                        className={`w-full flex items-center justify-between px-3 py-1.5 text-xs text-left transition-colors ${selected
-                          ? 'bg-indigo-50 font-bold text-indigo-700'
-                          : 'text-slate-700 hover:bg-slate-50 font-medium'
-                          }`}
-                      >
-                        <span className="truncate">{org.name}</span>
-                        {selected && <Check className="w-3.5 h-3.5 text-indigo-600 shrink-0" />}
-                      </button>
-                    );
-                  })}
+              </div>
+            ) : (
+              /* Honest Empty State when no activity is recorded */
+              <div className="py-10 px-4 rounded-xl border border-dashed border-slate-200 bg-slate-50/60 text-center space-y-3">
+                <div className="w-10 h-10 rounded-full bg-slate-200/80 flex items-center justify-center mx-auto text-slate-500">
+                  <Activity className="w-5 h-5" />
                 </div>
-                <div className="pt-1.5 mt-1 border-t border-slate-100 px-2">
-                  <Link
-                    href="/onboarding"
-                    className="block text-center text-xs font-semibold text-indigo-600 hover:text-indigo-700 py-1 rounded-md hover:bg-indigo-50/60"
-                  >
-                    + Create New Workspace
-                  </Link>
+                <div className="max-w-md mx-auto space-y-1">
+                  <h3 className="text-sm font-bold text-slate-800">No activity recorded yet</h3>
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    Connect GitHub repositories, Slack channels, or Jira to automatically capture commits, pull requests, and communication events.
+                  </p>
                 </div>
+                <Link
+                  href={`/workspace/${workspaceId}/integrations`}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition-colors"
+                >
+                  <Puzzle className="w-3.5 h-3.5" />
+                  <span>Configure Integrations</span>
+                </Link>
               </div>
             )}
-          </div>
-        </div>
 
-        {/* Right: Profile Avatar Icon Button ONLY */}
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => setShowProfileMenu((v) => !v)}
-            className="w-8 h-8 rounded-xl bg-slate-900 text-white font-bold text-xs flex items-center justify-center hover:bg-slate-800 transition-all shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            aria-label="User profile menu"
-          >
-            {userName[0]?.toUpperCase() || 'U'}
-          </button>
-
-          {showProfileMenu && (
-            <div className="absolute right-0 mt-2 w-64 rounded-2xl border border-slate-200/90 bg-white p-3.5 shadow-xl z-50 space-y-3">
-              <div className="border-b border-slate-100 pb-2.5">
-                <p className="text-xs font-bold text-slate-900 truncate">{userName}</p>
-                <p className="text-[11px] text-slate-500 truncate mt-0.5">{userEmail}</p>
-                <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 text-[10px] font-bold capitalize">
-                  <span className="w-1 h-1 rounded-full bg-indigo-600"></span>
-                  {role || 'Member'}
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                {canInvite && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowProfileMenu(false);
-                      setShowInvite(true);
-                      setInviteError(null);
-                      setInviteSuccess(null);
-                    }}
-                    className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 rounded-lg transition-colors"
-                  >
-                    <Plus className="w-3.5 h-3.5 text-slate-400" />
-                    Invite Teammate
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={onSignOut}
-                  className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                >
-                  <LogOut className="w-3.5 h-3.5 text-rose-500" />
-                  Sign Out
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-
-      </header>
-
-      {/* ---------------- 2. MAIN DASHBOARD BODY (Refined 125% Scale at 100% Zoom) ---------------- */}
-      <main className="py-4 px-5 sm:px-8 max-w-7xl mx-auto w-full space-y-4 overflow-hidden">
-
-        {switchError && (
-          <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">
-            {switchError}
-          </div>
-        )}
-
-        {/* ------------ SECTION 1: HIGH-LEVEL ANALYTICAL METRICS ROW ------------ */}
-        <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
-
-          {/* KPI 1: Codebase Health */}
-          <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm space-y-1">
-            <div className="flex items-center justify-between text-xs text-slate-500 font-semibold">
-              <span>Codebase Velocity</span>
-              <GitBranch className="w-4 h-4 text-indigo-600" />
-            </div>
-            <div className="text-2xl font-extrabold text-slate-900 tracking-tight">
-              {reposLoading ? '…' : repositories.length}
-            </div>
-            <p className="text-xs text-slate-500 truncate">
-              {repositories.length > 0
-                ? `${repositories.filter((r) => r.private).length} Private • ${repositories.filter((r) => !r.private).length} Public`
-                : 'No repositories connected'}
-            </p>
-          </div>
-
-          {/* KPI 2: Communication Sync */}
-          <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm space-y-1">
-            <div className="flex items-center justify-between text-xs text-slate-500 font-semibold">
-              <span>Communication Stream</span>
-              <MessageSquare className="w-4 h-4 text-emerald-600" />
-            </div>
-            <div className="text-2xl font-extrabold text-slate-900 tracking-tight">
-              {slackLoading ? '…' : slackChannels.length}
-            </div>
-            <p className="text-xs text-slate-500 truncate">
-              {slackChannels.length > 0 ? 'Live channel sync active' : 'No channels connected'}
-            </p>
-          </div>
-
-          {/* KPI 3: Access & Team */}
-          <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm space-y-1">
-            <div className="flex items-center justify-between text-xs text-slate-500 font-semibold">
-              <span>Active Member</span>
-              <User className="w-4 h-4 text-amber-600" />
-            </div>
-            <div className="text-2xl font-extrabold text-slate-900 tracking-tight">
-              1
-            </div>
-            <p className="text-xs text-slate-500 truncate">
-              Role: <span className="font-semibold text-slate-700 capitalize">{role || 'Owner'}</span>
-            </p>
-          </div>
-
-          {/* KPI 4: Security Status */}
-          <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-sm space-y-1">
-            <div className="flex items-center justify-between text-xs text-slate-500 font-semibold">
-              <span>Security State</span>
-              <Shield className="w-4 h-4 text-slate-700" />
-            </div>
-            <div className="text-2xl font-extrabold text-indigo-600 tracking-tight">
-              100%
-            </div>
-            <p className="text-xs text-slate-500 truncate">
-              TLS 1.3 • AES-256 Encrypted
-            </p>
-          </div>
-
-        </section>
-
-        {/* ------------ SECTION 2: 2-COLUMN ANALYTICS & HUB MATRIX ------------ */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-5 items-start">
-
-          {/* ------------ LEFT COLUMN (65% Width): Workspace Demo Analytics & Insights ------------ */}
-          <div className="lg:col-span-2 bg-white border border-slate-200/80 rounded-2xl p-4 sm:p-5 shadow-sm space-y-3.5">
-
-            <div className="space-y-3">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
-                <div>
-                  <h2 className="text-sm sm:text-base font-bold text-slate-900">Workspace Activity Analytics</h2>
-                  <p className="text-xs text-slate-500">Cross-tool engineering velocity &amp; activity insights</p>
-                </div>
-                <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded-full flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-600"></span>
-                  Demo Metrics
-                </span>
-              </div>
-
-              {/* Demo Analytical Widgets Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-3.5">
-
-                {/* Demo Widget 1: Weekly Commit & PR Trend */}
-                <div className="p-3.5 rounded-xl border border-slate-200/70 bg-[#FAFAFC] space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                      Commit Velocity
-                    </span>
-                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">
-                      +14.2%
-                    </span>
-                  </div>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-xl font-extrabold text-slate-900">34 Commits</span>
-                    <span className="text-xs text-slate-500">this week</span>
-                  </div>
-
-                  {/* Mini Activity Sparkline / Bar Graph */}
-                  <div className="flex items-end gap-1.5 h-7 pt-1">
-                    {[35, 60, 45, 80, 55, 90, 70].map((h, i) => (
-                      <div
-                        key={i}
-                        style={{ height: `${h}%` }}
-                        className={`flex-1 rounded-xs transition-all ${i === 5 ? 'bg-indigo-600' : 'bg-slate-200'
-                          }`}
-                        title={`Day ${i + 1}: ${h}% activity`}
-                      />
-                    ))}
-                  </div>
-                </div>
-
-                {/* Demo Widget 2: Task & Build Success Rate */}
-                <div className="p-3.5 rounded-xl border border-slate-200/70 bg-[#FAFAFC] space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                      Build Reliability
-                    </span>
-                    <span className="text-[10px] font-bold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
-                      Optimal
-                    </span>
-                  </div>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-xl font-extrabold text-slate-900">99.4%</span>
-                    <span className="text-xs text-slate-500">CI/CD uptime</span>
-                  </div>
-
-                  <div className="space-y-1 pt-1">
-                    <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
-                      <div className="bg-emerald-500 h-2 rounded-full w-[99%]" />
-                    </div>
-                    <div className="flex justify-between text-[11px] text-slate-400">
-                      <span>18 Passes</span>
-                      <span>0 Failures</span>
-                    </div>
-                  </div>
-                </div>
-
-              </div>
-
-              {/* Recent Activity Timeline Preview */}
-              <div className="p-3 rounded-xl border border-slate-200/60 bg-[#FAFAFC] space-y-1.5">
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                  Recent Pulse Stream
-                </span>
-                <div className="space-y-1 text-xs text-slate-700">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="flex items-center gap-1.5 truncate">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                      <strong className="text-slate-900">main</strong> branch build passed cleanly
-                    </span>
-                    <span className="text-[11px] text-slate-400 shrink-0">12m ago</span>
-                  </div>
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="flex items-center gap-1.5 truncate">
-                      <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
-                      PR #42 merged: <span className="text-slate-600 truncate">Authentication shell redesign</span>
-                    </span>
-                    <span className="text-[11px] text-slate-400 shrink-0">1h ago</span>
-                  </div>
-                </div>
-              </div>
-
-            </div>
-
-            {/* Quick Operations Matrix Shortcuts */}
-            <div className="pt-3 mt-2 border-t border-slate-100 flex items-center justify-between gap-3">
-              <span className="text-xs font-bold text-slate-500">Quick Navigation:</span>
-              <div className="flex items-center gap-1.5">
+            {/* Quick Navigation Shortcuts */}
+            <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Quick Navigation</span>
+              <div className="flex flex-wrap items-center gap-2">
                 <Link
-                  href={`/workspace/${activeOrganizationId}/repositories`}
-                  className="px-3 py-1 rounded-md border border-slate-200 bg-[#FAFAFC] hover:bg-white text-xs font-semibold text-slate-700 transition-colors"
+                  href={`/workspace/${workspaceId}/repositories`}
+                  className="px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-white text-xs font-semibold text-slate-700 transition-colors"
                 >
                   Repositories
                 </Link>
                 <Link
-                  href={`/workspace/${activeOrganizationId}/communication`}
-                  className="px-3 py-1 rounded-md border border-slate-200 bg-[#FAFAFC] hover:bg-white text-xs font-semibold text-slate-700 transition-colors"
+                  href={`/workspace/${workspaceId}/communication`}
+                  className="px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-white text-xs font-semibold text-slate-700 transition-colors"
                 >
                   Communication
                 </Link>
                 <Link
-                  href={`/workspace/${activeOrganizationId}/integrations`}
-                  className="px-3 py-1 rounded-md border border-slate-200 bg-[#FAFAFC] hover:bg-white text-xs font-semibold text-slate-700 transition-colors"
+                  href={`/workspace/${workspaceId}/integrations`}
+                  className="px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-white text-xs font-semibold text-slate-700 transition-colors"
                 >
                   Integrations
                 </Link>
                 <Link
-                  href={`/workspace/${activeOrganizationId}/settings`}
-                  className="px-3 py-1 rounded-md border border-slate-200 bg-[#FAFAFC] hover:bg-white text-xs font-semibold text-slate-700 transition-colors"
+                  href={`/workspace/${workspaceId}/settings`}
+                  className="px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-white text-xs font-semibold text-slate-700 transition-colors"
                 >
                   Settings
                 </Link>
               </div>
             </div>
-
           </div>
 
-          {/* ------------ RIGHT COLUMN (35% Width): Integration Health & Tenant Context ------------ */}
-          <div className="bg-white border border-slate-200/80 rounded-2xl p-4 sm:p-5 shadow-sm space-y-3.5">
-
-            <div>
-              <div className="flex items-center justify-between border-b border-slate-100 pb-2 mb-2.5">
-                <h3 className="text-xs sm:text-sm font-bold text-slate-900">Integration Health</h3>
-                <span className="text-[10px] font-bold text-slate-500">SYSTEM STATE</span>
+          {/* Panel 2: Recent Team Contributions / Activity Timeline */}
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-2xs space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h2 className="text-base font-bold text-slate-900">Recent Developer Activity</h2>
+                <p className="text-xs text-slate-500">Real contributor events from connected services.</p>
               </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center justify-between p-2 sm:p-2.5 rounded-xl bg-[#FAFAFC] border border-slate-200/60 text-xs sm:text-sm">
-                  <span className="font-semibold text-slate-800">GitHub</span>
-                  <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full">
-                    {repositories.length > 0 ? 'Active' : 'Ready'}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between p-2 sm:p-2.5 rounded-xl bg-[#FAFAFC] border border-slate-200/60 text-xs sm:text-sm">
-                  <span className="font-semibold text-slate-800">Slack</span>
-                  <span className="text-xs font-bold text-slate-600 bg-slate-100 px-2.5 py-0.5 rounded-full">
-                    {slackChannels.length > 0 ? 'Connected' : 'Setup Required'}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between p-2 sm:p-2.5 rounded-xl bg-[#FAFAFC] border border-slate-200/60 text-xs sm:text-sm">
-                  <span className="font-semibold text-slate-800">Jira</span>
-                  <span className="text-xs font-bold text-slate-600 bg-slate-100 px-2.5 py-0.5 rounded-full">
-                    Available
-                  </span>
-                </div>
-              </div>
+              <Link
+                href={`/workspace/${workspaceId}/developers`}
+                className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 flex items-center gap-1"
+              >
+                <span>View all</span>
+                <ArrowUpRight className="w-3.5 h-3.5" />
+              </Link>
             </div>
 
-            {/* Tenant Security & Ownership */}
-            <div className="pt-2 border-t border-slate-100 text-xs text-slate-500 space-y-1.5">
-              <div className="flex items-center justify-between">
-                <span className="font-semibold text-slate-700">Workspace ID:</span>
-                <code className="font-mono text-xs text-slate-900 bg-slate-100 px-1.5 py-0.5 rounded">
-                  {activeOrganizationId ? activeOrganizationId.slice(0, 10) + '…' : 'Standard'}
-                </code>
+            {analytics?.team && analytics.team.length > 0 ? (
+              <ul className="space-y-2.5">
+                {analytics.team.map((member) => (
+                  <li
+                    key={member.actor}
+                    className="flex items-center justify-between p-3 rounded-xl border border-slate-200/70 bg-slate-50/50 text-xs"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-white font-bold flex items-center justify-center uppercase">
+                        {String(member.actor)[0]}
+                      </div>
+                      <div>
+                        <p className="font-bold text-slate-800 capitalize">{member.actor}</p>
+                        <p className="text-slate-500 text-[11px]">
+                          {member.prsMerged} merged PRs · {member.issuesCompleted || 0} issues done · {member.total} total events
+                        </p>
+                      </div>
+                    </div>
+                    <span
+                      className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                        member.status === 'Healthy'
+                          ? 'bg-emerald-50 text-emerald-700'
+                          : member.status === 'At Risk'
+                          ? 'bg-amber-50 text-amber-700'
+                          : 'bg-slate-100 text-slate-600'
+                      }`}
+                    >
+                      {member.status}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="py-8 text-center text-xs text-slate-400 italic bg-slate-50/50 rounded-xl border border-slate-200/60">
+                No recent team contributions recorded in this period.
               </div>
-              <div className="flex items-center justify-between">
-                <span className="font-semibold text-slate-700">Data Privacy:</span>
-                <span className="text-emerald-700 font-semibold">100% Private</span>
-              </div>
-            </div>
-
+            )}
           </div>
-
         </div>
 
-      </main>
-
-      {/* ---------------- 3. INVITE MODAL ---------------- */}
-      {showInvite && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-6 backdrop-blur-sm"
-          role="dialog"
-          aria-modal="true"
-          onClick={() => setShowInvite(false)}
-        >
-          <div
-            className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                <h2 className="text-lg font-bold text-slate-900">Invite a teammate</h2>
-                <p className="mt-0.5 text-xs text-slate-500">
-                  They will receive an invitation to join <strong>{activeName}</strong>.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowInvite(false)}
-                className="text-slate-400 hover:text-slate-600 text-sm font-bold"
-              >
-                ✕
-              </button>
+        {/* ------------ RIGHT COLUMN (35% Width): Real Integration Health & Context ------------ */}
+        <div className="space-y-6">
+          {/* Panel 1: Integration Health Status */}
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-2xs space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="text-sm font-bold text-slate-900">Integration Health</h3>
+              <span className="text-[10px] font-bold tracking-wider uppercase text-slate-400">Live Status</span>
             </div>
 
-            <form onSubmit={onInvite} className="space-y-4" noValidate>
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wide text-slate-700 mb-1" htmlFor="invite-email">
-                  Work Email Address
-                </label>
-                <input
-                  id="invite-email"
-                  type="email"
-                  autoComplete="email"
-                  value={inviteEmail}
-                  onChange={(e) => setInviteEmail(e.target.value)}
-                  placeholder="teammate@company.com"
-                  className="w-full rounded-xl border border-slate-300/80 bg-white px-3.5 py-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
-                />
+            <div className="space-y-2.5">
+              {/* GitHub */}
+              <div className="flex items-center justify-between p-3 rounded-xl border border-slate-200/70 bg-slate-50/60 text-xs">
+                <div className="flex items-center gap-2.5 font-bold text-slate-800">
+                  <GitBranch className="w-4 h-4 text-slate-700" />
+                  <span>GitHub</span>
+                </div>
+                {githubStatus.loading ? (
+                  <span className="text-slate-400 text-[11px]">Checking…</span>
+                ) : githubStatus.connected ? (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold text-[10px] uppercase">
+                    <CheckCircle2 className="w-3 h-3" /> Connected
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 font-semibold text-[10px] uppercase">
+                    Not Connected
+                  </span>
+                )}
               </div>
 
-              <div>
-                <label className="block text-xs font-bold uppercase tracking-wide text-slate-700 mb-1" htmlFor="invite-role">
-                  Role
-                </label>
-                <select
-                  id="invite-role"
-                  value={inviteRole}
-                  onChange={(e) => setInviteRole(e.target.value)}
-                  className="w-full rounded-xl border border-slate-300/80 bg-white px-3.5 py-2.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
-                >
-                  {INVITE_ROLES.map((r) => (
-                    <option key={r.value} value={r.value}>
-                      {r.label}
-                    </option>
-                  ))}
-                </select>
+              {/* Slack */}
+              <div className="flex items-center justify-between p-3 rounded-xl border border-slate-200/70 bg-slate-50/60 text-xs">
+                <div className="flex items-center gap-2.5 font-bold text-slate-800">
+                  <MessageSquare className="w-4 h-4 text-emerald-600" />
+                  <span>Slack</span>
+                </div>
+                {slackStatus.loading ? (
+                  <span className="text-slate-400 text-[11px]">Checking…</span>
+                ) : slackStatus.connected ? (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold text-[10px] uppercase">
+                    <CheckCircle2 className="w-3 h-3" /> Connected
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 font-semibold text-[10px] uppercase">
+                    Not Connected
+                  </span>
+                )}
               </div>
 
-              {inviteError && (
-                <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-xs text-rose-800">
-                  {inviteError}
+              {/* Jira */}
+              <div className="flex items-center justify-between p-3 rounded-xl border border-slate-200/70 bg-slate-50/60 text-xs">
+                <div className="flex items-center gap-2.5 font-bold text-slate-800">
+                  <Ticket className="w-4 h-4 text-blue-600" />
+                  <span>Jira</span>
                 </div>
-              )}
-              {inviteSuccess && (
-                <div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 text-xs text-emerald-900">
-                  ✓ {inviteSuccess}
-                </div>
-              )}
+                {jiraStatus.loading ? (
+                  <span className="text-slate-400 text-[11px]">Checking…</span>
+                ) : jiraStatus.connected ? (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold text-[10px] uppercase">
+                    <CheckCircle2 className="w-3 h-3" /> Connected
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 font-semibold text-[10px] uppercase">
+                    Not Connected
+                  </span>
+                )}
+              </div>
+            </div>
 
-              <button
-                type="submit"
-                disabled={inviteBusy}
-                className="w-full rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-sm px-4 py-3 transition-all shadow-sm disabled:opacity-60 disabled:cursor-not-allowed mt-2"
+            <div className="pt-2 border-t border-slate-100">
+              <Link
+                href={`/workspace/${workspaceId}/integrations`}
+                className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 flex items-center justify-between"
               >
-                {inviteBusy ? 'Sending invitation…' : 'Send Invitation'}
-              </button>
-            </form>
+                <span>Manage Integrations</span>
+                <ArrowUpRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+          </div>
+
+          {/* Panel 2: System Risks & Alerts (Real) */}
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-2xs space-y-3">
+            <h3 className="text-sm font-bold text-slate-900 border-b border-slate-100 pb-2">
+              Risks & System Alerts
+            </h3>
+            {analytics?.risks && analytics.risks.length > 0 ? (
+              <ul className="space-y-2">
+                {analytics.risks.map((risk, idx) => (
+                  <li
+                    key={idx}
+                    className="p-2.5 rounded-xl border border-amber-200/80 bg-amber-50/70 text-xs text-amber-900 leading-relaxed flex items-start gap-2"
+                  >
+                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                    <span>{risk}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-xs text-slate-500 italic bg-slate-50 p-3 rounded-xl border border-slate-200/60">
+                No active system alerts for this period.
+              </p>
+            )}
+          </div>
+
+          {/* Panel 3: Workspace Metadata */}
+          <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-2xs space-y-2 text-xs text-slate-500">
+            <div className="flex items-center justify-between">
+              <span className="font-semibold text-slate-700">Workspace Context</span>
+              <span className="font-mono text-[11px] text-slate-900 bg-slate-100 px-2 py-0.5 rounded-md">
+                {workspaceId ? `${workspaceId.slice(0, 8)}…` : '—'}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="font-semibold text-slate-700">Data Isolation</span>
+              <span className="text-emerald-700 font-bold">100% Encrypted</span>
+            </div>
           </div>
         </div>
-      )}
-
+      </div>
     </div>
   );
 }
