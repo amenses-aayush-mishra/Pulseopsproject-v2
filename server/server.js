@@ -96,6 +96,10 @@ app.use('/api/workspace/:workspaceId/slack', slackRoutes);
 const aiSummariesRoutes = require('./src/routes/ai-summaries');
 app.use('/api/ai-summaries', aiSummariesRoutes);
 
+// Notification Bell routes — RBAC-scoped, deep-linked
+const notificationRoutes = require('./src/routes/notificationRoutes');
+app.use('/api/notifications', notificationRoutes);
+
 // Mirrored Slack files (local-disk storage by default). Routes are built from
 // random-stamped filenames under a workspace-scoped namespace; in production a
 // signed-URL layer should guard this mount.

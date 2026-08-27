@@ -25,6 +25,9 @@ function getGithubEventType(payload) {
   // Pull request events carry a `pull_request` object.
   if (payload && payload.pull_request) {
     const action = payload.action;
+    if (payload.pull_request.mergeable === false || payload.pull_request.has_conflicts === true) {
+      return 'pr_conflict';
+    }
     if (action === 'opened') return 'pr_opened';
     if (action === 'closed') {
       return payload.pull_request.merged === true ? 'pr_merged' : 'pr_closed';

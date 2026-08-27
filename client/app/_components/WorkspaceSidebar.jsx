@@ -10,6 +10,7 @@ import {
   ListTodo,
   BarChart,
   Users,
+  UserPlus,
   FileText,
   Ticket,
   Puzzle,
@@ -20,6 +21,8 @@ import {
 export default function WorkspaceSidebar({ workspaceId, role }) {
   const pathname = usePathname();
   const base = `/workspace/${workspaceId}`;
+  const userRole = (role || '').toLowerCase();
+  const canManageTeam = ['owner', 'admin', 'maintainer'].includes(userRole);
 
   const items = [
     { href: base, label: 'Overview', matchExact: true, icon: LayoutDashboard },
@@ -32,7 +35,9 @@ export default function WorkspaceSidebar({ workspaceId, role }) {
     { href: `${base}/tasks`, label: 'Tasks', icon: ListTodo },
     { href: `${base}/tickets`, label: 'Tickets', icon: Ticket },
     { href: `${base}/integrations`, label: 'Integrations', icon: Puzzle },
-    { href: `${base}/invitation`, label: 'Security', icon: Key },
+    ...(canManageTeam
+      ? [{ href: `${base}/invitations`, label: 'Team', icon: UserPlus }]
+      : []),
   ];
 
   const isActive = (item) =>

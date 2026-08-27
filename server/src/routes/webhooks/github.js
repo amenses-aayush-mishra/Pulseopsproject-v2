@@ -3,6 +3,7 @@ const Activity = require('../../models/Activity');
 const { normalizeGithub } = require('../../services/normalizers/github');
 const { verifyGithubWebhook } = require('../../middleware/verifyGithubWebhook');
 const Integration = require('../../models/Integration');
+const { createNotificationsForActivity } = require('../../services/notificationService');
 
 const router = express.Router();
 
@@ -60,6 +61,8 @@ router.post('/', verifyGithubWebhook, async (req, res) => {
 
     // Store in database
     const saved = await Activity.create(activity);
+    // Fire-and-forget notification fan-out (does NOT block the response)
+    createNotificationsForActivity(saved).catch(() => {});
 
     console.log(`✅ GitHub activity stored: ${saved.type} for org ${orgId}`);
 

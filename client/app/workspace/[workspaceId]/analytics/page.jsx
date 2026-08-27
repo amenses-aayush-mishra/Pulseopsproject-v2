@@ -19,8 +19,8 @@ export default function AnalyticsPage() {
     queryKey: ['analyticsOverview', organizationId],
     queryFn: () => fetchDashboard(organizationId, 7, token),
     enabled: !!organizationId,
-    refetchInterval: 60000,
-    staleTime: 15000,
+    refetchInterval: 20000,
+    staleTime: 10000,
   });
 
   const totals = data?.totals || {};

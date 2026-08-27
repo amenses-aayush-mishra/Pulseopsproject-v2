@@ -2,10 +2,16 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
+import Link from 'next/link';
+import { ShieldAlert } from 'lucide-react';
 
 const API_BASE = process.env.NEXT_PUBLIC_EXPRESS_API_URL || 'http://localhost:5000';
 
-const ROLES = ['developer', 'maintainer', 'admin', 'viewer'];
+const ROLE_OPTIONS = {
+  owner: ['developer', 'maintainer', 'admin', 'viewer'],
+  admin: ['developer', 'viewer'],
+  maintainer: ['developer', 'viewer'],
+};
 
 const ROLE_COLORS = {
   owner: 'bg-violet-50 text-violet-700 ring-violet-600/20',
@@ -29,9 +35,11 @@ function RoleBadge({ role }) {
 
 export default function InvitationsPage({ params }) {
   const { workspaceId } = params;
-  const { data: session } = useSession();
-  // Credentials logins store the JWT in localStorage; NextAuth OAuth sessions
-  // expose it as session.accessToken. Fall back to localStorage for creds users.
+  const { data: session, status } = useSession();
+  const userRole = (session?.user?.role || '').toLowerCase();
+  const isAllowedToAccess = ['owner', 'admin', 'maintainer'].includes(userRole);
+  const availableRoles = ROLE_OPTIONS[userRole] || ['developer', 'viewer'];
+
   const token =
     session?.accessToken ||
     (typeof window !== 'undefined' ? localStorage.getItem('pulseops_token') : null);
@@ -50,6 +58,12 @@ export default function InvitationsPage({ params }) {
   const [inviteError, setInviteError] = useState('');
   const [copied, setCopied] = useState(false);
 
+  useEffect(() => {
+    if (availableRoles.length > 0 && !availableRoles.includes(inviteRole)) {
+      setInviteRole(availableRoles[0]);
+    }
+  }, [userRole, availableRoles, inviteRole]);
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
@@ -65,6 +79,10 @@ export default function InvitationsPage({ params }) {
         const data = await membersRes.json();
         setMembers(data.members || []);
         setInvitations(data.invitations || []);
+      } else if (membersRes.status === 403) {
+        setError('Forbidden. You do not have permission to view team members.');
+      } else {
+        setError(`Failed to load workspace members (${membersRes.status}).`);
       }
     } catch (e) {
       setError('Failed to load workspace members.');
@@ -81,6 +99,13 @@ export default function InvitationsPage({ params }) {
     e.preventDefault();
     setInviteError('');
     setInviteResult(null);
+
+    const targetEmail = inviteOrgEmail.trim() || invitePersonalEmail.trim();
+    if (!targetEmail) {
+      setInviteError('Please enter an Organization Email or Personal Email.');
+      return;
+    }
+
     setSending(true);
     try {
       const res = await fetch(`${API_BASE}/api/organizations/invite`, {
@@ -90,8 +115,13 @@ export default function InvitationsPage({ params }) {
           'x-organization-id': workspaceId,
           'Content-Type': 'application/json',
         },
-        // Send as { email } — backend accepts email / orgEmail / personalEmail
-        body: JSON.stringify({ email: inviteOrgEmail.trim() || invitePersonalEmail.trim(), name: inviteName.trim(), role: inviteRole }),
+        body: JSON.stringify({
+          email: targetEmail,
+          orgEmail: inviteOrgEmail.trim(),
+          personalEmail: invitePersonalEmail.trim(),
+          name: inviteName.trim(),
+          role: inviteRole,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -118,6 +148,25 @@ export default function InvitationsPage({ params }) {
     });
   };
 
+  if (status !== 'loading' && session && !isAllowedToAccess) {
+    return (
+      <div className="max-w-2xl mx-auto my-12 p-8 rounded-2xl border border-rose-200 bg-white shadow-xs text-center space-y-4">
+        <div className="mx-auto w-12 h-12 rounded-full bg-rose-100 flex items-center justify-center text-rose-600">
+          <ShieldAlert className="w-6 h-6" />
+        </div>
+        <h2 className="text-xl font-bold text-slate-900">Access Denied (403)</h2>
+        <p className="text-sm text-slate-600">
+          You do not have permission to view or manage team invitations in this workspace. Only Owners, Admins, and Maintainers may access this page.
+        </p>
+        <Link
+          href={`/workspace/${workspaceId}`}
+          className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 transition-colors"
+        >
+          Return to Overview
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-4xl mx-auto space-y-10">
@@ -135,7 +184,6 @@ export default function InvitationsPage({ params }) {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <input
               type="email"
-              required
               placeholder="Organization Email (e.g., colleague@company.com)"
               value={inviteOrgEmail}
               onChange={(e) => setInviteOrgEmail(e.target.value)}
@@ -143,7 +191,6 @@ export default function InvitationsPage({ params }) {
             />
             <input
               type="email"
-              required
               placeholder="Personal Email (e.g., colleague@gmail.com)"
               value={invitePersonalEmail}
               onChange={(e) => setInvitePersonalEmail(e.target.value)}
@@ -161,7 +208,7 @@ export default function InvitationsPage({ params }) {
               onChange={(e) => setInviteRole(e.target.value)}
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200 capitalize"
             >
-              {ROLES.map((r) => (
+              {availableRoles.map((r) => (
                 <option key={r} value={r} className="capitalize">
                   {r}
                 </option>
@@ -171,7 +218,7 @@ export default function InvitationsPage({ params }) {
           <button
             type="submit"
             disabled={sending}
-            className="self-end inline-flex items-center justify-center rounded-lg bg-indigo-600 px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700 disabled:opacity-60"
+            className="self-end inline-flex items-center justify-center rounded-lg bg-indigo-600 px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700 disabled:opacity-60 cursor-pointer"
           >
             {sending ? 'Sending…' : 'Send Invite'}
           </button>
@@ -278,3 +325,4 @@ export default function InvitationsPage({ params }) {
     </div>
   );
 }
+

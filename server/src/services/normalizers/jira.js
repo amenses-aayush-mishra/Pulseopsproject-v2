@@ -17,22 +17,24 @@ function normalizeJira(payload, organizationId) {
     sourceId = payload.webhookEvent || 'unknown';
   }
   
-  // Determine event type from webhookEvent, stripping the `jira:` prefix so
-  // stored activities use the spec identifiers (issue_created, issue_updated...).
-  const type = (payload.webhookEvent || 'unknown').replace(/^jira:/, '');
-  
+  // Extract key fields for easier querying and context building
+  const issueKey = payload.issue?.key;
+  const issueSummary = payload.issue?.fields?.summary;
+  const issueStatus = payload.issue?.fields?.status?.name || '';
+  const statusLower = issueStatus.toLowerCase();
+
+  // Determine event type from webhookEvent and status
+  let type = (payload.webhookEvent || 'unknown').replace(/^jira:/, '');
+  if (statusLower && (['done', 'closed', 'resolved'].includes(statusLower) || statusLower.includes('done') || statusLower.includes('closed'))) {
+    type = 'issue_completed';
+  }
+
   // Convert Jira timestamp to Date object
-  // Jira sends timestamp in milliseconds since epoch
   let timestamp = new Date(); // fallback to now
   if (payload.timestamp && !isNaN(payload.timestamp)) {
     timestamp = new Date(parseInt(payload.timestamp, 10));
   }
-  
-  // Extract key fields for easier querying and context building
-  const issueKey = payload.issue?.key;
-  const issueSummary = payload.issue?.fields?.summary;
-  const issueStatus = payload.issue?.fields?.status?.name;
-  
+
   return {
     organizationId,
     source: 'jira',

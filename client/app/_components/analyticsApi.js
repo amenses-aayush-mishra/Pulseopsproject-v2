@@ -41,4 +41,19 @@ async function fetchDevelopers(orgId, days = 30, token = null) {
   return json?.data || [];
 }
 
-module.exports = { API_BASE, fetchDashboard, fetchDevelopers };
+/** Trigger on-demand recompute of analytics. */
+async function recomputeAnalytics(orgId, token = null) {
+  const res = await fetch(`${API_BASE}/api/analytics/recompute`, {
+    method: 'POST',
+    headers: { ...buildHeaders(token), 'x-organization-id': orgId },
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const err = new Error(json?.message || `Failed to recompute analytics (${res.status})`);
+    err.status = res.status;
+    throw err;
+  }
+  return json;
+}
+
+module.exports = { API_BASE, fetchDashboard, fetchDevelopers, recomputeAnalytics };

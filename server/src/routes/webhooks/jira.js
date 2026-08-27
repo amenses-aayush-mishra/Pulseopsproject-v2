@@ -5,6 +5,7 @@ const Integration = require('../../models/Integration');
 const JiraWebhookEvent = require('../../models/JiraWebhookEvent');
 const Activity = require('../../models/Activity');
 const { normalizeJira } = require('../../services/normalizers/jira');
+const { createNotificationsForActivity } = require('../../services/notificationService');
 
 const router = express.Router();
 
@@ -137,7 +138,7 @@ router.post('/', async (req, res) => {
       const orgObjectId = new mongoose.Types.ObjectId(orgId.toString());
       const activity = normalizeJira(payload, orgId.toString());
       if (activity) {
-        await Activity.findOneAndUpdate(
+        const savedJiraActivity = await Activity.findOneAndUpdate(
           {
             organizationId: orgObjectId,
             source: 'jira',
@@ -149,8 +150,12 @@ router.post('/', async (req, res) => {
               organizationId: orgObjectId,  // always store as ObjectId
             }
           },
-          { upsert: true }
+          { upsert: true, new: true }
         );
+        // Fire-and-forget notification fan-out
+        if (savedJiraActivity) {
+          createNotificationsForActivity(savedJiraActivity).catch(() => {});
+        }
       }
     } catch (actErr) {
       console.warn('[jira/webhook] Activity creation skipped:', actErr.message);

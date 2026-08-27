@@ -198,6 +198,12 @@ async function handleInvite(req, res) {
         .json({ message: `role must be one of: ${ALLOWED_ROLES.join(', ')}.` });
     }
 
+    if (['admin', 'maintainer'].includes(req.userRole) && ['admin', 'owner'].includes(role)) {
+      return res.status(403).json({
+        message: 'Forbidden. Admin and Maintainer can only invite Developer or Viewer roles.',
+      });
+    }
+
     // Auto-generate a temporary password so the invitee can sign in immediately.
     const tempPassword = crypto.randomBytes(6).toString('hex'); // 12 hex chars
 

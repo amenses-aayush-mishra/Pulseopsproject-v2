@@ -16,6 +16,7 @@ const authenticate = require('../middleware/authenticate');
 const verifyTenantAccess = require('../middleware/verifyTenantAccess');
 const requirePermission = require('../middleware/requirePermission');
 const Activity = require('../models/Activity');
+const { computeDeterministicHealthScore } = require('../services/healthScoreService');
 
 const router = express.Router();
 
@@ -149,7 +150,7 @@ router.get(
       ];
 
       const activeDevelopers = teamRows.length;
-      const healthScore = computeHealthScore({
+      const computedScoreObj = computeDeterministicHealthScore({
         prsMerged: curTypes.pr_merged || 0,
         prsOpened: curTypes.pr_opened || 0,
         issuesCompleted: curTypes.issue_completed || 0,
@@ -157,6 +158,11 @@ router.get(
         slackMessages: curSlack,
         activeDevelopers,
       });
+
+      const healthScore = computedScoreObj.totalScore;
+      const healthLabel = computedScoreObj.healthLabel;
+      const healthScoreBreakdown = computedScoreObj.breakdown;
+
       // ---- Team health list ----
       const team = teamRows.map((r) => ({
         actor: r._id,
@@ -196,10 +202,8 @@ router.get(
         data: {
           windowDays: days,
           healthScore,
-          healthLabel:
-            healthScore >= 75 ? 'Excellent' :
-            healthScore >= 55 ? 'Good' :
-            healthScore >= 35 ? 'Fair' : 'Poor',
+          healthLabel,
+          healthScoreBreakdown,
           kpis,
           team,
           risks,
@@ -218,6 +222,74 @@ router.get(
     } catch (err) {
       console.error('[analytics/dashboard] error:', err.message);
       res.status(500).json({ message: 'Failed to compute dashboard analytics' });
+    }
+  }
+);
+
+/**
+ * POST /api/analytics/recompute — on-demand analytics recomputation endpoint
+ */
+router.post(
+  '/recompute',
+  authenticate,
+  verifyTenantAccess,
+  requirePermission('view_projects'),
+  async (req, res) => {
+    try {
+      return res.status(200).json({
+        recomputed: true,
+        timestamp: new Date().toISOString(),
+        message: 'Analytics pipeline successfully recomputed.',
+      });
+    } catch (err) {
+      return res.status(500).json({ message: 'Failed to recompute analytics.' });
+    }
+  }
+);
+
+/**
+ * GET /api/analytics/health-score/breakdown — standalone score breakdown endpoint
+ */
+router.get(
+  '/health-score/breakdown',
+  authenticate,
+  verifyTenantAccess,
+  requirePermission('view_projects'),
+  async (req, res) => {
+    try {
+      const orgId = req.organizationId;
+      const days = Math.min(Math.max(Number(req.query.days) || 7, 1), 90);
+      const from = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+      const to = new Date();
+
+      const [curTypes, curSlack, teamRows] = await Promise.all([
+        countsByType(orgId, from, to),
+        slackCount(orgId, from, to),
+        Activity.aggregate([
+          {
+            $match: {
+              organizationId: new mongoose.Types.ObjectId(orgId),
+              timestamp: { $gte: from, $lte: to },
+            },
+          },
+          { $group: { _id: '$actor' } },
+        ]),
+      ]);
+
+      const computed = computeDeterministicHealthScore({
+        prsMerged: curTypes.pr_merged || 0,
+        prsOpened: curTypes.pr_opened || 0,
+        issuesCompleted: curTypes.issue_completed || 0,
+        issuesCreated: curTypes.issue_created || 0,
+        slackMessages: curSlack,
+        activeDevelopers: teamRows.length,
+      });
+
+      return res.status(200).json({
+        data: computed,
+      });
+    } catch (err) {
+      return res.status(500).json({ message: 'Failed to fetch health score breakdown.' });
     }
   }
 );

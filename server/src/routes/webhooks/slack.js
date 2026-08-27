@@ -3,6 +3,7 @@ const Activity = require('../../models/Activity');
 const { normalizeSlack } = require('../../services/normalizers/slack');
 const { verifySlackSignature } = require('../../middleware/verifySlackSignature');
 const Integration = require('../../models/Integration');
+const { createNotificationsForActivity } = require('../../services/notificationService');
 
 const router = express.Router();
 
@@ -75,9 +76,11 @@ async function slackHandler(req, res) {
     const activity = normalizeSlack(req.body, orgId);
 
     // Store in database
-    await Activity.create(activity);
+    const savedActivity = await Activity.create(activity);
+    // Fire-and-forget notification fan-out
+    createNotificationsForActivity(savedActivity).catch(() => {});
 
-    console.log(`✅ Slack activity stored: ${activity.type} for org ${orgId}`);
+    console.log(`✅ Slack activity stored: ${savedActivity.type} for org ${orgId}`);
 
     res.status(200).json({ received: true });
   } catch (error) {

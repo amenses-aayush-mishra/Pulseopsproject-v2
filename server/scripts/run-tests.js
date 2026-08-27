@@ -18,6 +18,7 @@ const suites = [
   'src/services/ai/gemini.service.test.js',       // Ticket 5
   'src/ai/validation/ai-summary.validation.test.js', // Ticket 6
   'src/routes/ai-summaries.route.test.js',        // Ticket 7
+  'src/services/healthScoreService.test.js',       // Phase 2 Health Score
 ];
 
 let failures = 0;
