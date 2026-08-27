@@ -22,8 +22,10 @@ import {
   ExternalLink,
   ListTodo,
   Ticket,
+  Plus,
 } from 'lucide-react';
 import { fetchDashboard } from './analyticsApi';
+import CreateWorkspaceModal from './CreateWorkspaceModal';
 
 const API_BASE = process.env.NEXT_PUBLIC_EXPRESS_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 const ME_ENDPOINT = `${API_BASE}/api/auth/me`;
@@ -48,6 +50,7 @@ export default function WorkspaceDashboard() {
   const [analytics, setAnalytics] = useState(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(true);
   const [analyticsError, setAnalyticsError] = useState(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   // Real Integration Statuses
   const [githubStatus, setGithubStatus] = useState({ connected: false, loading: true });
@@ -206,12 +209,20 @@ export default function WorkspaceDashboard() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Link
-            href={`/workspace/${workspaceId}/repositories`}
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowCreateModal(true)}
             className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition-all shadow-sm"
           >
-            <GitBranch className="w-4 h-4" />
+            <Plus className="w-4 h-4" />
+            <span>Create Workspace</span>
+          </button>
+          <Link
+            href={`/workspace/${workspaceId}/repositories`}
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold transition-all shadow-2xs"
+          >
+            <GitBranch className="w-4 h-4 text-slate-700" />
             <span>Connect Repo</span>
           </Link>
           <Link
@@ -573,6 +584,11 @@ export default function WorkspaceDashboard() {
           </div>
         </div>
       </div>
+
+      <CreateWorkspaceModal
+        open={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+      />
     </div>
   );
 }

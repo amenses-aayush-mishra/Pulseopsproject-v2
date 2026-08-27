@@ -706,17 +706,47 @@ export default function CommunicationPage({ params }) {
       ) : (
 
 
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-          <div className="flex items-center gap-2 border-b border-slate-100 px-4 py-3">
-            <SlackIcon className="h-4 w-4" />
-            <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              {data.teamName || 'Slack'} {channelLabel ? `· ${channelLabel}` : ''}
+        <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-2xs">
+          <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/50 px-5 py-3.5">
+            <div className="flex items-center gap-2">
+              <div className="flex h-6 w-6 items-center justify-center rounded-md bg-rose-50 text-rose-600">
+                <SlackIcon className="h-3.5 w-3.5" />
+              </div>
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                {data.teamName || 'Slack'} {channelLabel ? `· ${channelLabel}` : ''}
+              </span>
+            </div>
+            <span className="text-[11px] font-semibold text-slate-400">
+              {messages.length} {messages.length === 1 ? 'message' : 'messages'}
             </span>
           </div>
-          <div className="divide-y divide-slate-100">
-            {messages.map((m) => (
-              <MessageRow key={m.id || m.ts} message={m} onOpenThread={openThread} token={token} workspaceId={workspaceId} />
-            ))}
+          <div className="divide-y divide-slate-100/80">
+            {messages.map((m, idx) => {
+              const currentDay = formatDay(m.ts);
+              const prevDay = idx > 0 ? formatDay(messages[idx - 1].ts) : null;
+              const showDateDivider = currentDay && currentDay !== prevDay;
+
+              return (
+                <div key={m.id || m.ts}>
+                  {showDateDivider && (
+                    <div className="relative my-2 flex items-center justify-center px-4">
+                      <div className="absolute inset-0 flex items-center px-4" aria-hidden="true">
+                        <div className="w-full border-t border-slate-200/70" />
+                      </div>
+                      <div className="relative rounded-full border border-slate-200/80 bg-slate-50 px-3 py-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-500 shadow-2xs">
+                        {currentDay}
+                      </div>
+                    </div>
+                  )}
+                  <MessageRow
+                    message={m}
+                    onOpenThread={openThread}
+                    token={token}
+                    workspaceId={workspaceId}
+                  />
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
