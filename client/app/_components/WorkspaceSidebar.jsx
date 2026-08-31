@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import SlackSidebarSection from './SlackSidebarSection';
+import { isSectionVisible } from './sidebarRbacConfig';
 import {
   LayoutDashboard,
   GitBranch,
@@ -22,23 +23,19 @@ export default function WorkspaceSidebar({ workspaceId, role }) {
   const pathname = usePathname();
   const base = `/workspace/${workspaceId}`;
   const userRole = (role || '').toLowerCase();
-  const canManageTeam = ['owner', 'admin', 'maintainer'].includes(userRole);
 
   const items = [
-    { href: base, label: 'Overview', matchExact: true, icon: LayoutDashboard },
-    { href: `${base}/projects`, label: 'Workspace', icon: FolderKanban },
-    { href: `${base}/repositories`, label: 'Repositories', icon: GitBranch },
-    { href: `${base}/communication`, label: 'Communication', icon: MessagesSquare },
-    { href: `${base}/reports`, label: 'Reports', icon: FileText },
-    { href: `${base}/analytics`, label: 'Analytics', icon: BarChart },
-    { href: `${base}/developers`, label: 'Developers', icon: Users },
-    { href: `${base}/tasks`, label: 'Tasks', icon: ListTodo },
-    { href: `${base}/tickets`, label: 'Tickets', icon: Ticket },
-    { href: `${base}/integrations`, label: 'Integrations', icon: Puzzle },
-    ...(canManageTeam
-      ? [{ href: `${base}/invitations`, label: 'Team', icon: UserPlus }]
-      : []),
-  ];
+    { href: base, label: 'Overview', matchExact: true, icon: LayoutDashboard, sectionKey: 'overview' },
+    { href: `${base}/projects`, label: 'Workspace', icon: FolderKanban, sectionKey: 'workspace' },
+    { href: `${base}/repositories`, label: 'Repositories', icon: GitBranch, sectionKey: 'repositories' },
+    { href: `${base}/communication`, label: 'Communication', icon: MessagesSquare, sectionKey: 'communication' },
+    { href: `${base}/reports`, label: 'Reports', icon: FileText, sectionKey: 'reports' },
+    { href: `${base}/analytics`, label: 'Analytics', icon: BarChart, sectionKey: 'analytics' },
+    { href: `${base}/developers`, label: 'Developers', icon: Users, sectionKey: 'developers' },
+    { href: `${base}/tasks`, label: 'Tasks', icon: ListTodo, sectionKey: 'tasks' },
+    { href: `${base}/integrations`, label: 'Integrations', icon: Puzzle, sectionKey: 'integrations' },
+    { href: `${base}/invitations`, label: 'Team', icon: UserPlus, sectionKey: 'team' },
+  ].filter((item) => isSectionVisible(userRole, item.sectionKey));
 
   const isActive = (item) =>
     item.matchExact
@@ -73,8 +70,8 @@ export default function WorkspaceSidebar({ workspaceId, role }) {
               aria-current={active ? 'page' : undefined}
               title={item.label}
               className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all ${active
-                  ? 'bg-indigo-50 text-indigo-700 font-bold shadow-2xs'
-                  : 'text-slate-600 hover:bg-slate-100/70 hover:text-slate-900'
+                ? 'bg-indigo-50 text-indigo-700 font-bold shadow-2xs'
+                : 'text-slate-600 hover:bg-slate-100/70 hover:text-slate-900'
                 }`}
             >
               {Icon && (
