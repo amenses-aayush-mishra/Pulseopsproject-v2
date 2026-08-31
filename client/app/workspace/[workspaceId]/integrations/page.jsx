@@ -798,14 +798,6 @@ function JiraPanel({ workspaceId, token }) {
       topActions={
         isConnected ? (
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setShowDetails(!showDetails)}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-50 transition-colors"
-            >
-              {showDetails ? <ChevronUp className="h-3.5 w-3.5 text-slate-400" /> : <ChevronDown className="h-3.5 w-3.5 text-slate-400" />}
-              <span>{showDetails ? 'Hide Settings' : 'Manage Sync'}</span>
-            </button>
             {disableMsg && (
               <div
                 role={disableMsg.ok ? 'status' : 'alert'}
@@ -841,98 +833,6 @@ function JiraPanel({ workspaceId, token }) {
           </div>
         ) : showDetails ? (
           <>
-            {/* Connected Info */}
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="font-medium text-slate-900">Site:</span>
-                <span className="truncate max-w-xs font-mono text-xs bg-white px-2 py-1 rounded border">{siteUrl}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="font-medium text-slate-900">Cloud ID:</span>
-                <span className="truncate max-w-xs font-mono text-xs bg-white px-2 py-1 rounded border">{cloudId}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="font-medium text-slate-900">Last Sync:</span>
-                <span>{formatDate(lastSyncAt)}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="font-medium text-slate-900">Webhook:</span>
-                <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${webhookRegistered ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
-                  {webhookRegistered ? 'Registered' : 'Not Registered'}
-                </span>
-              </div>
-            </div>
-
-            {/* Projects Selection */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h4 className="text-sm font-semibold text-slate-900">Select Project to Sync</h4>
-                <button
-                  onClick={loadProjects}
-                  disabled={projectsLoading}
-                  className="text-xs text-indigo-600 hover:underline disabled:opacity-50"
-                >
-                  {projectsLoading ? 'Loading...' : 'Refresh'}
-                </button>
-              </div>
-              {projectsError && <p className="text-sm text-rose-600">{projectsError}</p>}
-              {projectsLoading ? (
-                <div className="flex justify-center py-4">
-                  <Loader2 className="h-6 w-6 animate-spin text-slate-300" />
-                </div>
-              ) : projects.length === 0 ? (
-                <p className="text-sm text-slate-500">No projects found or Jira not connected.</p>
-              ) : (
-                <select
-                  value={selectedProjectKey}
-                  onChange={(e) => setSelectedProjectKey(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200"
-                >
-                  <option value="">— Choose a project —</option>
-                  {projects.map((p) => (
-                    <option key={p.key} value={p.key}>
-                      {p.key} — {p.name}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
-
-            {/* Sync Section */}
-            {selectedProjectKey && (
-              <div className="space-y-3 rounded-lg border border-slate-200 p-4">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-semibold text-slate-900">Sync Issues</h4>
-                  {status?.syncStates?.find(s => s.projectKey === selectedProjectKey)?.status === 'syncing' && (
-                    <span className="inline-flex items-center gap-1 text-xs text-amber-600 font-medium">
-                      <Loader2 className="h-3 w-3 animate-spin" /> Syncing in background...
-                    </span>
-                  )}
-                </div>
-                {status?.syncStates?.find(s => s.projectKey === selectedProjectKey) && (
-                  <div className="text-xs text-slate-500 mb-2">
-                    Synced {status.syncStates.find(s => s.projectKey === selectedProjectKey).issuesSynced} issues.
-                    Status: <span className="font-medium text-slate-700 capitalize">{status.syncStates.find(s => s.projectKey === selectedProjectKey).status}</span>
-                  </div>
-                )}
-                {syncResult && (
-                  <div
-                    role={syncResult.ok ? 'status' : 'alert'}
-                    className={`rounded-lg border px-4 py-2.5 text-xs font-medium ${syncResult.ok ? 'border-emerald-100 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-700'}`}
-                  >
-                    {syncResult.ok ? '✓ ' : '⚠ '}{syncResult.message}
-                  </div>
-                )}
-                <button
-                  onClick={handleSync}
-                  disabled={syncing || !selectedProjectKey || status?.syncStates?.find(s => s.projectKey === selectedProjectKey)?.status === 'syncing'}
-                  className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700 disabled:opacity-60"
-                >
-                  {(syncing || status?.syncStates?.find(s => s.projectKey === selectedProjectKey)?.status === 'syncing') ? <Loader2 className="h-4 w-4 animate-spin" /> : <Loader2 className="h-4 w-4" />}
-                  {(syncing || status?.syncStates?.find(s => s.projectKey === selectedProjectKey)?.status === 'syncing') ? 'Syncing…' : 'Start Full Sync'}
-                </button>
-              </div>
-            )}
 
             {/* Webhook Registration */}
             {selectedProjectKey && (
