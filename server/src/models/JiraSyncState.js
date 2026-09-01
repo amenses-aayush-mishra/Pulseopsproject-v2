@@ -17,6 +17,7 @@ const jiraSyncStateSchema = new Schema({
   
   // Counters for visibility
   issuesSynced: { type: Number, default: 0 },
+  failedCount: { type: Number, default: 0 },   // issues that failed to upsert in this run
   commentsSynced: { type: Number, default: 0 },
   worklogsSynced: { type: Number, default: 0 },
   attachmentsSynced: { type: Number, default: 0 },

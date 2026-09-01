@@ -171,15 +171,15 @@ export default function InvitationsPage({ params }) {
   return (
     <div className="max-w-4xl mx-auto space-y-10">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900">Team & Invitations</h1>
-        <p className="mt-2 text-sm text-slate-500">
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-[#E9E9E7]">Team & Invitations</h1>
+        <p className="mt-2 text-sm text-slate-500 dark:text-[#9B9B9B]">
           Manage workspace members and invite new teammates.
         </p>
       </div>
 
       {/* Invite form */}
-      <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 className="text-base font-semibold text-slate-900 mb-4">Invite a teammate</h2>
+      <div className="rounded-xl border border-slate-200 dark:border-[#2F2F2F] bg-white dark:bg-[#202020] p-6 shadow-sm">
+        <h2 className="text-base font-semibold text-slate-900 dark:text-[#E9E9E7] mb-4">Invite a teammate</h2>
         <form onSubmit={handleInvite} className="flex flex-col gap-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <input
@@ -187,29 +187,29 @@ export default function InvitationsPage({ params }) {
               placeholder="Organization Email (e.g., colleague@company.com)"
               value={inviteOrgEmail}
               onChange={(e) => setInviteOrgEmail(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200"
+              className="w-full rounded-lg border border-slate-300 dark:border-[#2F2F2F] bg-white dark:bg-[#202020] text-slate-900 dark:text-[#E9E9E7] placeholder-slate-400 dark:placeholder-[#6F6F6F] px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
             />
             <input
               type="email"
               placeholder="Personal Email (e.g., colleague@gmail.com)"
               value={invitePersonalEmail}
               onChange={(e) => setInvitePersonalEmail(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200"
+              className="w-full rounded-lg border border-slate-300 dark:border-[#2F2F2F] bg-white dark:bg-[#202020] text-slate-900 dark:text-[#E9E9E7] placeholder-slate-400 dark:placeholder-[#6F6F6F] px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
             />
             <input
               type="text"
               placeholder="Name (Optional)"
               value={inviteName}
               onChange={(e) => setInviteName(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200"
+              className="w-full rounded-lg border border-slate-300 dark:border-[#2F2F2F] bg-white dark:bg-[#202020] text-slate-900 dark:text-[#E9E9E7] placeholder-slate-400 dark:placeholder-[#6F6F6F] px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
             />
             <select
               value={inviteRole}
               onChange={(e) => setInviteRole(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200 capitalize"
+              className="w-full rounded-lg border border-slate-300 dark:border-[#2F2F2F] bg-white dark:bg-[#202020] text-slate-900 dark:text-[#E9E9E7] px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 capitalize"
             >
               {availableRoles.map((r) => (
-                <option key={r} value={r} className="capitalize">
+                <option key={r} value={r} className="capitalize bg-white dark:bg-[#202020] text-slate-900 dark:text-[#E9E9E7]">
                   {r}
                 </option>
               ))}
@@ -225,27 +225,27 @@ export default function InvitationsPage({ params }) {
         </form>
 
         {inviteError && (
-          <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
+          <div className="mt-3 rounded-lg border border-rose-200 dark:border-rose-900/50 bg-rose-50 dark:bg-rose-950/30 px-3 py-2 text-sm text-rose-800 dark:text-rose-300">
             {inviteError}
           </div>
         )}
 
         {inviteResult && (
-          <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 space-y-2">
+          <div className="mt-3 rounded-lg border border-emerald-200 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/30 px-4 py-3 text-sm text-emerald-900 dark:text-emerald-300 space-y-2">
             <p className="font-medium">✓ Invitation sent!</p>
             {inviteResult.tempPassword && (
               <div>
-                <p className="text-emerald-700">Temporary password (share securely):</p>
-                <div className="mt-1 rounded bg-white border border-emerald-200 px-3 py-2 font-mono text-lg font-bold tracking-widest text-slate-800">
+                <p className="text-emerald-700 dark:text-emerald-400">Temporary password (share securely):</p>
+                <div className="mt-1 rounded bg-white dark:bg-[#191919] border border-emerald-200 dark:border-emerald-800 px-3 py-2 font-mono text-lg font-bold tracking-widest text-slate-800 dark:text-emerald-300">
                   {inviteResult.tempPassword}
                 </div>
-                <p className="mt-1 text-xs text-emerald-600">
+                <p className="mt-1 text-xs text-emerald-600 dark:text-emerald-400">
                   The invitee will be required to change this on first login.
                 </p>
               </div>
             )}
             {inviteResult.inviteUrl && (
-              <p className="text-xs text-emerald-700 break-all">
+              <p className="text-xs text-emerald-700 dark:text-emerald-400 break-all">
                 <span className="font-medium">Login link: </span>
                 <a
                   href={inviteResult.inviteUrl}
@@ -262,9 +262,9 @@ export default function InvitationsPage({ params }) {
       </div>
 
       {/* Members table */}
-      <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-100">
-          <h2 className="text-base font-semibold text-slate-900">Active members</h2>
+      <div className="rounded-xl border border-slate-200 dark:border-[#2F2F2F] bg-white dark:bg-[#202020] shadow-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-100 dark:border-[#2F2F2F]">
+          <h2 className="text-base font-semibold text-slate-900 dark:text-[#E9E9E7]">Active members</h2>
         </div>
         {loading ? (
           <div className="flex items-center justify-center py-16">
@@ -273,15 +273,15 @@ export default function InvitationsPage({ params }) {
         ) : error ? (
           <p className="p-6 text-sm text-rose-600">{error}</p>
         ) : members.length === 0 ? (
-          <p className="p-6 text-sm text-slate-400">No members found.</p>
+          <p className="p-6 text-sm text-slate-400 dark:text-[#9B9B9B]">No members found.</p>
         ) : (
-          <ul className="divide-y divide-slate-100">
+          <ul className="divide-y divide-slate-100 dark:divide-[#2F2F2F]">
             {members.map((m) => (
-              <li key={m.userId || m._id} className="flex items-center justify-between px-6 py-4">
+              <li key={m.userId || m._id} className="flex items-center justify-between px-6 py-4 hover:bg-slate-50/50 dark:hover:bg-[#2A2A2A] transition-colors">
                 <div>
-                  <p className="text-sm font-medium text-slate-900">{m.name || m.email || 'Unknown'}</p>
+                  <p className="text-sm font-medium text-slate-900 dark:text-[#E9E9E7]">{m.name || m.email || 'Unknown'}</p>
                   {m.email && m.name && (
-                    <p className="text-xs text-slate-500 mt-0.5">{m.email}</p>
+                    <p className="text-xs text-slate-500 dark:text-[#9B9B9B] mt-0.5">{m.email}</p>
                   )}
                 </div>
                 <RoleBadge role={m.role} />
@@ -293,27 +293,27 @@ export default function InvitationsPage({ params }) {
 
       {/* Pending invitations */}
       {invitations.length > 0 && (
-        <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-          <div className="px-6 py-4 border-b border-slate-100">
-            <h2 className="text-base font-semibold text-slate-900">
+        <div className="rounded-xl border border-slate-200 dark:border-[#2F2F2F] bg-white dark:bg-[#202020] shadow-sm overflow-hidden">
+          <div className="px-6 py-4 border-b border-slate-100 dark:border-[#2F2F2F]">
+            <h2 className="text-base font-semibold text-slate-900 dark:text-[#E9E9E7]">
               Pending invitations
-              <span className="ml-2 inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-600/20">
+              <span className="ml-2 inline-flex items-center rounded-full bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300 ring-1 ring-inset ring-amber-600/20">
                 {invitations.length}
               </span>
             </h2>
           </div>
-          <ul className="divide-y divide-slate-100">
+          <ul className="divide-y divide-slate-100 dark:divide-[#2F2F2F]">
             {invitations.map((inv) => (
-              <li key={inv._id} className="flex items-center justify-between px-6 py-4">
+              <li key={inv._id} className="flex items-center justify-between px-6 py-4 hover:bg-slate-50/50 dark:hover:bg-[#2A2A2A] transition-colors">
                 <div>
-                  <p className="text-sm font-medium text-slate-900">{inv.email}</p>
-                  <p className="text-xs text-slate-400 mt-0.5">
+                  <p className="text-sm font-medium text-slate-900 dark:text-[#E9E9E7]">{inv.email}</p>
+                  <p className="text-xs text-slate-400 dark:text-[#9B9B9B] mt-0.5">
                     Expires {new Date(inv.expiresAt).toLocaleDateString()}
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
                   <RoleBadge role={inv.role} />
-                  <span className="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-600/20">
+                  <span className="inline-flex items-center rounded-full bg-amber-50 dark:bg-amber-950/40 px-2.5 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300 ring-1 ring-inset ring-amber-600/20">
                     Pending
                   </span>
                 </div>

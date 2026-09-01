@@ -3,6 +3,9 @@ const { getActivityForRange } = require('../services/ai/activity.service');
 const { buildContext } = require('../ai/services/context-builder.service');
 const { geminiService } = require('../services/ai/gemini.service');
 const AISummary = require('../models/AISummary');
+const authenticate = require('../middleware/authenticate');
+const verifyTenantAccess = require('../middleware/verifyTenantAccess');
+const requirePermission = require('../middleware/requirePermission');
 
 const router = express.Router();
 
@@ -37,9 +40,9 @@ function normalizeSummaryType(type) {
  * GET /api/ai-summaries/latest
  * Fetch the most recent summary for an organization.
  */
-router.get('/latest', async (req, res) => {
+router.get('/latest', authenticate, verifyTenantAccess, requirePermission('view_reports'), async (req, res) => {
   try {
-    const { organizationId } = req.query;
+    const organizationId = req.organizationId || req.query.organizationId;
 
     if (!organizationId) {
       return res.status(400).json({ error: 'organizationId is required' });
@@ -71,9 +74,10 @@ router.get('/latest', async (req, res) => {
  * GET /api/ai-summaries
  * Fetch all summaries for an organization with pagination.
  */
-router.get('/', async (req, res) => {
+router.get('/', authenticate, verifyTenantAccess, requirePermission('view_reports'), async (req, res) => {
   try {
-    const { organizationId, limit = 10, offset = 0 } = req.query;
+    const organizationId = req.organizationId || req.query.organizationId;
+    const { limit = 10, offset = 0 } = req.query;
 
     if (!organizationId) {
       return res.status(400).json({ error: 'organizationId is required' });
@@ -114,10 +118,10 @@ router.get('/', async (req, res) => {
  * GET /api/ai-summaries/:id
  * Fetch a specific summary by ID (scoped to the organization).
  */
-router.get('/:id', async (req, res) => {
+router.get('/:id', authenticate, verifyTenantAccess, requirePermission('view_reports'), async (req, res) => {
   try {
     const { id } = req.params;
-    const { organizationId } = req.query;
+    const organizationId = req.organizationId || req.query.organizationId;
 
     if (!organizationId) {
       return res.status(400).json({ error: 'organizationId is required' });
@@ -149,7 +153,7 @@ router.get('/:id', async (req, res) => {
  * POST /api/ai-summaries
  * Generate a new AI summary from recent activity and persist it.
  */
-router.post('/', async (req, res) => {
+router.post('/', authenticate, verifyTenantAccess, requirePermission('generate_reports'), async (req, res) => {
   try {
     const { type = 'weekly', startDate, endDate, organizationId } = req.body;
 

@@ -5,10 +5,18 @@ class JiraService {
   constructor() {
     this.clientId = process.env.JIRA_CLIENT_ID;
     this.clientSecret = process.env.JIRA_CLIENT_SECRET;
-    this.redirectUri = process.env.JIRA_REDIRECT_URI || process.env.JIRA_CALLBACK_URL || 'http://localhost:5000/api/integrations/jira/callback';
     this.authUrl = 'https://auth.atlassian.com/authorize';
     this.tokenUrl = 'https://auth.atlassian.com/oauth/token';
     this.apiBaseUrl = 'https://api.atlassian.com';
+  }
+
+  get redirectUri() {
+    try {
+      const { getJiraCallbackUrl } = require('../utils/publicUrl');
+      return getJiraCallbackUrl() || 'http://localhost:5000/api/integrations/jira/callback';
+    } catch {
+      return process.env.JIRA_REDIRECT_URI || process.env.JIRA_CALLBACK_URL || 'http://localhost:5000/api/integrations/jira/callback';
+    }
   }
 
   getAuthUrl(state) {
@@ -161,7 +169,10 @@ class JiraService {
       return {
         issues: data.issues || [],
         nextPageToken: data.nextPageToken || '',
-        isLast: data.isLast !== false,
+        // Primary termination signal: no nextPageToken in response.
+        // isLast is a secondary signal — Atlassian sometimes omits it,
+        // so we must not treat its absence as meaning "is last page".
+        isLast: data.isLast === true || !data.nextPageToken,
       };
     } catch (error) {
       const status = error.response && error.response.status;

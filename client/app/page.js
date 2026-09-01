@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import ThemeToggle from './_components/ThemeToggle';
 import {
   GitBranch,
   MessageSquare,
@@ -27,21 +28,21 @@ export default function HomePage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-[#FAFAFC] text-slate-900 font-sans selection:bg-indigo-100 selection:text-indigo-900">
+    <div className="min-h-screen bg-[var(--bg)] text-[var(--text-primary)] font-sans selection:bg-indigo-100 selection:text-indigo-900 dark:selection:bg-indigo-900/40 dark:selection:text-indigo-100 transition-colors duration-200">
       {/* ---------------- 1. NAVBAR ---------------- */}
-      <header className="sticky top-0 z-50 bg-[#FAFAFC]/90 backdrop-blur-md border-b border-slate-200/60 transition-all">
+      <header className="sticky top-0 z-50 bg-[var(--bg)]/90 backdrop-blur-md border-b border-[var(--border)] transition-all">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-18 flex items-center justify-between py-4">
           {/* Left: Brand Logo */}
           <Link href="/" className="flex items-center gap-2.5 group">
-            <div className="h-8 w-8 rounded-lg bg-slate-900 flex items-center justify-center text-white shadow-sm group-hover:scale-105 transition-transform">
+            <div className="h-8 w-8 rounded-lg bg-slate-900 dark:bg-slate-100 flex items-center justify-center text-white dark:text-slate-900 shadow-sm group-hover:scale-105 transition-all">
               {/* 3 rounded vertical bars logo icon */}
               <div className="flex items-center gap-0.5">
-                <span className="w-1 h-3.5 bg-white rounded-full"></span>
-                <span className="w-1 h-5 bg-white rounded-full"></span>
-                <span className="w-1 h-3.5 bg-white rounded-full"></span>
+                <span className="w-1 h-3.5 bg-white dark:bg-slate-900 rounded-full"></span>
+                <span className="w-1 h-5 bg-white dark:bg-slate-900 rounded-full"></span>
+                <span className="w-1 h-3.5 bg-white dark:bg-slate-900 rounded-full"></span>
               </div>
             </div>
-            <span className="text-xl font-bold tracking-tight text-slate-900">
+            <span className="text-xl font-bold tracking-tight text-slate-900 dark:text-[var(--text-primary)]">
               PulseOps
             </span>
           </Link>
@@ -82,22 +83,24 @@ export default function HomePage() {
 
           {/* Right Action CTAs */}
           <div className="hidden md:flex items-center gap-4">
+            <ThemeToggle />
             <Link
               href="/login"
-              className="text-sm font-semibold text-slate-700 hover:text-slate-900 px-3 py-2 transition-colors"
+              className="text-sm font-semibold text-slate-700 dark:text-[var(--text-secondary)] hover:text-slate-900 dark:hover:text-[var(--text-primary)] px-3 py-2 transition-colors"
             >
               Sign in
             </Link>
             <Link
               href="/register"
-              className="text-sm font-semibold text-white bg-slate-900 hover:bg-slate-800 px-4 py-2 rounded-xl transition-all shadow-sm hover:shadow-md"
+              className="text-sm font-semibold text-white bg-slate-900 dark:bg-indigo-600 hover:bg-slate-800 dark:hover:bg-indigo-500 px-4 py-2 rounded-xl transition-all shadow-sm hover:shadow-md"
             >
               Get Started
             </Link>
           </div>
 
           {/* Mobile Hamburger Toggle Button */}
-          <div className="md:hidden flex items-center">
+          <div className="md:hidden flex items-center gap-3">
+            <ThemeToggle />
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               className="p-2 text-slate-600 hover:text-slate-900 focus:outline-none"
@@ -110,7 +113,7 @@ export default function HomePage() {
 
         {/* Mobile Dropdown Menu */}
         {mobileMenuOpen && (
-          <div className="md:hidden bg-white border-b border-slate-200 px-4 pt-3 pb-6 space-y-3 shadow-lg">
+          <div className="md:hidden bg-[var(--surface)] border-b border-[var(--border)] px-4 pt-3 pb-6 space-y-3 shadow-lg">
             <a
               href="#product"
               onClick={() => setMobileMenuOpen(false)}

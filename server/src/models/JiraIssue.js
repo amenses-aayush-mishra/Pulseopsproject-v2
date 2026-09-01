@@ -8,11 +8,18 @@ const jiraIssueSchema = new Schema({
     required: true,
   },
   // Core Jira fields
-  jiraIssueId: { type: String, required: true, unique: true },
+  // NOTE: jiraIssueId is NOT globally unique — Jira IDs (e.g. "10001") are
+  // scoped to an Atlassian site. Two PulseOps workspaces connecting the same
+  // Atlassian account produce identical jiraIssueId values. The unique
+  // constraint must therefore be (organizationId, jiraIssueId), not
+  // jiraIssueId alone. See compound index below.
+  jiraIssueId: { type: String, required: true },
   issueKey: { type: String, required: true },
   summary: { type: String, required: true },
   description: { type: String },
-  issueType: { type: String, required: true },
+  // issueType is NOT required — Jira sub-tasks and epics may omit issuetype.name,
+  // and a missing field must not abort the entire sync batch.
+  issueType: { type: String },
   status: { type: String, required: true },
   priority: { type: String },
 
@@ -53,7 +60,13 @@ const jiraIssueSchema = new Schema({
   lastSyncAt: { type: Date, default: Date.now },
 }, { timestamps: true });
 
-// Indexes for performance
+// Primary workspace-scoped uniqueness: one document per (workspace, Jira issue).
+// This replaces the previous globally-unique jiraIssueId index that caused
+// E11000 duplicate key errors when the same Atlassian site is connected to
+// multiple PulseOps workspaces.
+jiraIssueSchema.index({ organizationId: 1, jiraIssueId: 1 }, { unique: true });
+
+// Performance indexes
 jiraIssueSchema.index({ organizationId: 1, projectKey: 1 });
 jiraIssueSchema.index({ organizationId: 1, status: 1 });
 jiraIssueSchema.index({ organizationId: 1, assignee: 1 });
