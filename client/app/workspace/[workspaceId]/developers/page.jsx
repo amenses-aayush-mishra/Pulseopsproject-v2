@@ -39,14 +39,14 @@ export default function DevelopersPage() {
     <div className="max-w-7xl mx-auto space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Developer Health & Activity</h1>
-          <p className="mt-1 text-sm text-slate-500">
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-[#E9E9E7]">Developer Health & Activity</h1>
+          <p className="mt-1 text-sm text-slate-500 dark:text-[#9B9B9B]">
             Per-developer contribution metrics, health status, and workload tracking.
           </p>
         </div>
 
         {/* Period Selector */}
-        <div className="inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+        <div className="inline-flex rounded-xl border border-slate-200 dark:border-[#2F2F2F] bg-white dark:bg-[#202020] p-1 shadow-sm">
           {[7, 14, 30].map((d) => (
             <button
               key={d}
@@ -55,7 +55,7 @@ export default function DevelopersPage() {
               className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
                 days === d
                   ? 'bg-indigo-600 text-white shadow-sm'
-                  : 'text-slate-600 hover:bg-slate-100'
+                  : 'text-slate-600 dark:text-[#9B9B9B] hover:bg-slate-100 dark:hover:bg-[#2A2A2A]'
               }`}
             >
               Last {d} days
@@ -66,36 +66,36 @@ export default function DevelopersPage() {
 
       {/* Search Bar */}
       <div className="relative max-w-md">
-        <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+        <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 dark:text-[#6F6F6F]" />
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search developer names..."
-          className="w-full rounded-xl border border-slate-200 bg-white pl-10 pr-4 py-2 text-sm text-slate-900 shadow-sm outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+          className="w-full rounded-xl border border-slate-200 dark:border-[#2F2F2F] bg-white dark:bg-[#202020] pl-10 pr-4 py-2 text-sm text-slate-900 dark:text-[#E9E9E7] placeholder-slate-400 dark:placeholder-[#6F6F6F] shadow-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
         />
       </div>
 
       {isLoading && (
         <div className="flex justify-center py-16">
-          <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-6 py-4 text-sm text-slate-500 shadow-sm">
-            <Loader2 className="h-5 w-5 animate-spin text-indigo-600" />
+          <div className="flex items-center gap-2 rounded-xl border border-slate-200 dark:border-[#2F2F2F] bg-white dark:bg-[#202020] px-6 py-4 text-sm text-slate-500 dark:text-[#9B9B9B] shadow-sm">
+            <Loader2 className="h-5 w-5 animate-spin text-indigo-600 dark:text-indigo-400" />
             Loading developer health metrics…
           </div>
         </div>
       )}
 
       {isError && (
-        <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800 shadow-sm">
+        <div role="alert" className="rounded-xl border border-rose-200 dark:border-rose-900/50 bg-rose-50 dark:bg-rose-950/30 p-4 text-sm text-rose-800 dark:text-rose-300 shadow-sm">
           {error?.message || 'Could not load developers.'}
         </div>
       )}
 
       {!isLoading && !isError && (
-        <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        <div className="rounded-2xl border border-slate-200 dark:border-[#2F2F2F] bg-white dark:bg-[#202020] shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-100 text-sm">
+            <table className="min-w-full divide-y divide-slate-100 dark:divide-[#2F2F2F] text-sm">
               <thead>
-                <tr className="bg-slate-50/70 text-left text-xs font-bold uppercase tracking-wider text-slate-500">
+                <tr className="bg-slate-50/70 dark:bg-[#191919] text-left text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-[#9B9B9B]">
                   <th className="px-6 py-4">Developer</th>
                   <th className="px-6 py-4">Health Status</th>
                   <th className="px-6 py-4">Total Events</th>

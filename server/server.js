@@ -34,20 +34,36 @@ app.use(securityHeaders);
 //    also allowed (client dev server + production-build smoke-test ports).
 const FRONTEND_URL =
   process.env.FRONTEND_URL || process.env.CLIENT_URL || 'http://localhost:3000';
-const LOCAL_DEV_ORIGINS = ['http://localhost:3000', 'http://localhost:3100'];
+const LOCAL_DEV_ORIGINS = ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:3100'];
 
-app.use(
-  cors({
-    origin: ['http://localhost:3000', 'http://127.0.0.1:3000'],
-    credentials: true,
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-organization-id'],
-  })
-);
-app.options('*', cors({
-  origin: ['http://localhost:3000', 'http://127.0.0.1:3000'],
+const allowedOrigins = [
+  process.env.FRONTEND_URL,
+  process.env.CLIENT_URL,
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'http://127.0.0.1:3000',
+  'http://127.0.0.1:3001',
+  'http://localhost:3100',
+  'http://localhost:3002',
+].filter(Boolean);
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    } else {
+      return callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-organization-id'],
-}));
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 
 // TASK-112: JSON body parser. The `verify` callback captures the RAW request
 // body so the GitHub webhook route can recompute X-Hub-Signature-256 over the
@@ -127,12 +143,39 @@ app.use((req, res) => {
 
 app.use(errorHandler);
 
+const { getSlackCallbackUrl, getJiraCallbackUrl, getGithubCallbackUrl, ensurePublicBackendUrl, getPublicBackendUrl } = require('./src/utils/publicUrl');
+
 const startServer = async () => {
+  // Resolve public URL BEFORE connecting — ensures ngrok tunnel is detected early
+  // and OAuth redirect_uris are built from the live tunnel, not stale env.
+  const publicUrl = await ensurePublicBackendUrl();
+
   await connectDB();
-  startSlackWorker(); // async in-memory queue consuming Slack webhook/sync jobs
-  startJiraWorker();  // async in-memory queue consuming Jira webhook/sync jobs
-  app.listen(process.env.PORT || 5000, () => {
-    console.log(`Server running on port ${process.env.PORT || 5000}`);
+  startSlackWorker();
+  startJiraWorker();
+
+  const slackCallback = getSlackCallbackUrl();
+  const jiraCallback = getJiraCallbackUrl();
+  const githubCallback = getGithubCallbackUrl();
+
+  const port = process.env.PORT || 5000;
+  app.listen(port, () => {
+    console.log(`Server running on port ${port}`);
+    console.log(`🌐 Public Backend URL: ${publicUrl || getPublicBackendUrl()}`);
+    console.log(`🔗 Slack OAuth Callback: ${slackCallback}`);
+    console.log(`🔗 Jira OAuth Callback: ${jiraCallback}`);
+    console.log(`🔗 GitHub OAuth Callback: ${githubCallback}`);
+    if (slackCallback && slackCallback.includes('localhost')) {
+      console.warn('⚠️  Slack callback is localhost — Slack cannot reach it over the internet.');
+      console.warn('   Run `npm run dev:tunnel` or start ngrok (`ngrok http 5000`) and restart the server.');
+      console.warn('   Or set NGROK_STATIC_DOMAIN=<your-reserved-domain> in server/.env for a stable URL.');
+      console.warn('   After a hostname change, paste the callback above into: Slack App → OAuth & Permissions → Redirect URLs');
+      console.warn('   Direct link: https://api.slack.com/apps → Your App → OAuth & Permissions');
+    } else if (slackCallback && slackCallback.includes('ngrok')) {
+      const host = new URL(slackCallback).host;
+      console.log(`👉 If this ngrok host changed since last run, paste ${slackCallback} into Slack dashboard → OAuth & Permissions → Redirect URLs`);
+      console.log(`   https://api.slack.com/apps → Your App → OAuth & Permissions (add & Save URLs)`);
+    }
   });
 };
 

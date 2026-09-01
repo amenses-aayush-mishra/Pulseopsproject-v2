@@ -308,15 +308,14 @@ router.post(
 
 
 /**
- * GET /api/organizations/settings — protected (requirePermission('manage_workspace'))
+ * GET /api/organizations/settings — protected
  * Returns the active organization's profile + themeSettings for the workspace
- * shell (TASK-107) and the settings UI.
+ * shell and the settings UI.
  */
 router.get(
   '/settings',
   authenticate,
   verifyTenantAccess,
-  requirePermission('manage_workspace'),
   async (req, res) => {
     try {
       const org = await Organization.findById(req.organizationId);
@@ -341,13 +340,53 @@ router.get(
 );
 
 /**
+ * PATCH /api/organizations/theme — protected
+ * Updates the active organization's primary accent color in themeSettings.
+ */
+router.patch(
+  '/theme',
+  authenticate,
+  verifyTenantAccess,
+  async (req, res) => {
+    try {
+      const { primaryColor } = req.body;
+      if (!primaryColor || typeof primaryColor !== 'string') {
+        return res.status(400).json({ message: 'primaryColor is required.' });
+      }
+
+      const org = await Organization.findById(req.organizationId);
+      if (!org) {
+        return res.status(404).json({ message: 'Organization not found.' });
+      }
+
+      if (!org.themeSettings) {
+        org.themeSettings = {};
+      }
+
+      org.themeSettings.primaryColor = primaryColor;
+      await org.save();
+
+      return res.status(200).json({
+        success: true,
+        themeSettings: org.themeSettings,
+      });
+    } catch (err) {
+      console.error('Org theme update error:', err.message);
+      return res.status(500).json({ message: 'Internal server error' });
+    }
+  }
+);
+
+/**
  * GET /api/organizations/members
  * Returns the active member list + pending invitations for the active org.
+ * Guarded by `requirePermission('view_developers')`.
  */
 router.get(
   '/members',
   authenticate,
   verifyTenantAccess,
+  requirePermission('view_developers'),
   async (req, res) => {
     try {
       const [memberDocs, inviteDocs] = await Promise.all([
@@ -375,6 +414,95 @@ router.get(
       return res.status(200).json({ members, invitations: inviteDocs });
     } catch (err) {
       console.error('[members] error:', err.message);
+      return res.status(500).json({ message: 'Internal server error' });
+    }
+  }
+);
+
+/**
+ * PATCH /api/organizations/members/:memberId/role
+ * Updates a member's role.
+ * - Requires `manage_members` permission.
+ * - Blocked: Non-owners cannot change anyone else's role to owner/admin, nor modify an owner/admin's role.
+ */
+router.patch(
+  '/members/:memberId/role',
+  authenticate,
+  verifyTenantAccess,
+  requirePermission('manage_members'),
+  async (req, res) => {
+    try {
+      const { memberId } = req.params;
+      const { role } = req.body;
+
+      if (!ALLOWED_ROLES.includes(role)) {
+        return res.status(400).json({ message: 'Invalid role.' });
+      }
+
+      const targetMember = await OrganizationMember.findOne({
+        _id: memberId,
+        organizationId: req.organizationId,
+      });
+
+      if (!targetMember) {
+        return res.status(404).json({ message: 'Member not found.' });
+      }
+
+      // Operational rule: Non-owners (admin/maintainer) CANNOT change role of an owner/admin or grant owner/admin role.
+      if (req.userRole !== 'owner') {
+        if (['owner', 'admin'].includes(targetMember.role) || ['owner', 'admin'].includes(role)) {
+          return res.status(403).json({
+            message: 'Forbidden. Only the workspace owner can modify or assign Admin/Owner roles.',
+          });
+        }
+      }
+
+      targetMember.role = role;
+      await targetMember.save();
+
+      return res.status(200).json({ success: true, member: targetMember });
+    } catch (err) {
+      console.error('[update-role] error:', err.message);
+      return res.status(500).json({ message: 'Internal server error' });
+    }
+  }
+);
+
+/**
+ * DELETE /api/organizations/members/:memberId
+ * Removes a member from the organization.
+ * - Requires `manage_members` permission.
+ * - Blocked: Non-owners cannot remove owner or admin members.
+ */
+router.delete(
+  '/members/:memberId',
+  authenticate,
+  verifyTenantAccess,
+  requirePermission('manage_members'),
+  async (req, res) => {
+    try {
+      const { memberId } = req.params;
+      const targetMember = await OrganizationMember.findOne({
+        _id: memberId,
+        organizationId: req.organizationId,
+      });
+
+      if (!targetMember) {
+        return res.status(404).json({ message: 'Member not found.' });
+      }
+
+      if (targetMember.role === 'owner') {
+        return res.status(403).json({ message: 'Forbidden. The workspace owner cannot be removed.' });
+      }
+
+      if (req.userRole !== 'owner' && targetMember.role === 'admin') {
+        return res.status(403).json({ message: 'Forbidden. Only the workspace owner can remove Admins.' });
+      }
+
+      await OrganizationMember.deleteOne({ _id: memberId });
+      return res.status(200).json({ success: true });
+    } catch (err) {
+      console.error('[remove-member] error:', err.message);
       return res.status(500).json({ message: 'Internal server error' });
     }
   }

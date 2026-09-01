@@ -4,18 +4,199 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================================
+   PULSEOPS DESIGN TOKEN SYSTEM — 3-layer architecture
+   ============================================================
+   Layer A  — Primitive tokens  (raw values, never used directly in UI)
+   Layer B  — Semantic tokens   (purpose-based, switch per theme)
+   Layer C  — Component tokens  (per-element aliases of semantic tokens)
+   ============================================================
+   Accent tokens are a FOURTH independent layer: they default to the
+   existing indigo/purple scale but are overridable per-workspace
+   (Phase 3) via inline style on the workspace layout root without
+   affecting the light/dark semantic tokens at all.
+   ============================================================ */
+
+/* ----------------------------------------------------------
+   LAYER A — PRIMITIVE TOKENS
+   Raw values. Never reference these from component code;
+   always go through semantic or component tokens.
+   ---------------------------------------------------------- */
+:root {
+  /* Light-mode gray scale (anchored on existing #FAFAFC page background) */
+  --gray-50:  #FAFAFC;   /* current page background */
+  --gray-100: #F8FAFC;   /* subtle surface tint */
+  --gray-200: #E2E8F0;   /* border — maps to Tailwind slate-200 */
+  --gray-300: #CBD5E1;   /* input border */
+  --gray-400: #94A3B8;   /* text-secondary/muted — slate-400 */
+  --gray-500: #64748B;   /* text-secondary — slate-500 */
+  --gray-600: #475569;   /* text mid-emphasis — slate-600 */
+  --gray-900: #0F172A;   /* text-primary — slate-900 */
+  --white:    #FFFFFF;
+
+  /* Dark-mode neutral scale (Notion-inspired cohesive dark palette) */
+  --dark-950: #191919;   /* page background, dark */
+  --dark-900: #202020;   /* surface / card, dark */
+  --dark-800: #2A2A2A;   /* surface-hover / elevated surface, dark */
+  --dark-700: #2F2F2F;   /* border, dark */
+  --dark-600: #383838;   /* subtle separator, dark */
+  --dark-400: #9B9B9B;   /* text-secondary, dark */
+  --dark-300: #6F6F6F;   /* text-muted, dark */
+  --dark-100: #E9E9E7;   /* text-primary, dark */
+
+  /* ---- Accent primitive scale (indigo/violet — default palette) ----
+     These are the ONLY vars that Phase 3 will override per workspace.
+     They sit in :root so they're always available as a fallback.
+     -------------------------------------------------------------- */
+  --accent-50:  #EEF2FF;   /* indigo-50  */
+  --accent-100: #E0E7FF;   /* indigo-100 */
+  --accent-200: #C7D2FE;   /* indigo-200 */
+  --accent-300: #A5B4FC;   /* indigo-300 */
+  --accent-400: #818CF8;   /* indigo-400 */
+  --accent-500: #4F46E5;   /* indigo-600 — main accent (existing default) */
+  --accent-600: #4338CA;   /* indigo-700 — hover state */
+  --accent-700: #3730A3;   /* indigo-800 — pressed state */
+  --accent-text: #FFFFFF;  /* text on accent-colored backgrounds */
+}
+
+/* ----------------------------------------------------------
+   LAYER B — SEMANTIC TOKENS
+   Purpose-based aliases that switch per theme.
+   Components MUST reference only these (or Layer C below),
+   never primitive tokens or raw hex.
+   ---------------------------------------------------------- */
+
+/* Light theme (default — no class needed) */
+:root,
+[data-theme="light"] {
+  --bg:               var(--gray-50);     /* page / layout background */
+  --surface:          var(--white);       /* cards, panels, modals */
+  --surface-hover:    #F1F5F9;
+  --surface-elevated: var(--white);       /* dropdowns, popovers, modals */
+  --surface-subtle:   var(--gray-100);    /* table rows, hover states */
+  --border:           var(--gray-200);    /* all dividers and outlines */
+  --border-subtle:    var(--gray-300);    /* input borders, faint separators */
+  --text-primary:     var(--gray-900);    /* headings, body copy */
+  --text-secondary:   var(--gray-500);    /* captions, labels, meta */
+  --text-muted:       var(--gray-400);    /* placeholder text, icons */
+  --text-mid:         var(--gray-600);    /* secondary emphasis */
+  --overlay:          rgba(15,23,42,0.4); /* modal backdrop */
+}
+
+/* Dark theme — applied by next-themes adding class="dark" on <html> */
+.dark,
+[data-theme="dark"] {
+  --bg:               #191919;
+  --surface:          #202020;
+  --surface-hover:    #2A2A2A;
+  --surface-elevated: #202020;
+  --surface-subtle:   #2A2A2A;
+  --border:           #2F2F2F;
+  --border-subtle:    #2F2F2F;
+  --text-primary:     #E9E9E7;
+  --text-secondary:   #9B9B9B;
+  --text-muted:       #6F6F6F;
+  --text-mid:         #9B9B9B;
+  --overlay:          rgba(0,0,0,0.7);
+}
+
+/* ----------------------------------------------------------
+   LAYER C — COMPONENT TOKENS
+   Per-element semantic aliases. Keep components thin —
+   they consume these tokens, never hardcode values.
+   ---------------------------------------------------------- */
+:root {
+  /* Layout shell */
+  --sidebar-bg:          var(--surface);
+  --sidebar-border:      var(--border);
+  --topbar-bg:           var(--surface);
+  --topbar-border:       var(--border);
+
+  /* Cards / panels */
+  --card-bg:             var(--surface);
+  --card-border:         var(--border);
+  --card-shadow:         0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+
+  /* Buttons */
+  --button-primary-bg:      var(--accent-500);
+  --button-primary-hover:   var(--accent-600);
+  --button-primary-text:    var(--accent-text);
+  --button-ghost-hover-bg:  var(--surface-subtle);
+
+  /* Navigation */
+  --nav-active-bg:       var(--accent-50);
+  --nav-active-text:     var(--accent-500);
+  --nav-active-border:   var(--accent-500);
+  --nav-hover-bg:        var(--surface-subtle);
+
+  /* Forms */
+  --input-bg:            var(--surface);
+  --input-border:        var(--border-subtle);
+  --input-focus-border:  var(--accent-500);
+  --input-focus-ring:    var(--accent-200);
+  --input-text:          var(--text-primary);
+  --input-placeholder:   var(--text-muted);
+
+  /* Focus ring (keyboard navigation) */
+  --focus-ring:          var(--accent-500);
+  --focus-ring-offset:   var(--surface);
+
+  /* Badges / status — semantic, not accent */
+  --badge-success-bg:    #d1fae5;
+  --badge-success-text:  #065f46;
+  --badge-warning-bg:    #fef3c7;
+  --badge-warning-text:  #92400e;
+  --badge-error-bg:      #fee2e2;
+  --badge-error-text:    #991b1b;
+  --badge-info-bg:       var(--accent-100);
+  --badge-info-text:     var(--accent-700);
+
+  /* Charts (theme-aware — Phase 4 will reference these) */
+  --chart-primary:       var(--accent-500);
+  --chart-secondary:     var(--accent-300);
+  --chart-grid:          var(--border);
+  --chart-axis-text:     var(--text-muted);
+  --chart-tooltip-bg:    var(--surface-elevated);
+  --chart-tooltip-border: var(--border);
+}
+
+/* ----------------------------------------------------------
+   BASE BODY RULE
+   Same visual output as before — bg stays #FAFAFC, text stays
+   #0F172A — but now driven by semantic tokens so dark mode
+   flips both automatically when Phase 2 adds the toggle.
+   ---------------------------------------------------------- */
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text-primary);
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* ----------------------------------------------------------
+   SMOOTH THEME TRANSITION
+   Applied to common structural elements so the toggle
+   animates cleanly in Phase 2 (no jarring flash).
+   Deliberately scoped to avoid slowing down every element.
+   ---------------------------------------------------------- */
+header,
+aside,
+main,
+nav,
+footer,
+dialog,
+[role="dialog"] {
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+/* ----------------------------------------------------------
+   UTILITIES
+   ---------------------------------------------------------- */
 @layer utilities {
   .font-handwriting {
     font-family: 'Caveat', cursive, sans-serif;
   }
 }
-
-body {
-  margin: 0;
-  background: #fafafc;
-  color: #0f172a;
-  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-

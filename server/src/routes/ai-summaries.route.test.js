@@ -140,6 +140,17 @@ function installMock(rel, fake) {
 }
 
 async function main() {
+  installMock('../middleware/authenticate', (req, res, next) => {
+    req.user = { userId: 'user123' };
+    next();
+  });
+  installMock('../middleware/verifyTenantAccess', (req, res, next) => {
+    req.organizationId = req.query.organizationId || req.body?.organizationId || null;
+    req.userRole = 'owner';
+    next();
+  });
+  installMock('../middleware/requirePermission', () => (req, res, next) => next());
+
   installMock('../services/ai/activity.service', MockActivityService);
   installMock('../ai/services/context-builder.service', MockContextBuilder);
   installMock('../services/ai/gemini.service', MockGeminiService);

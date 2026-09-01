@@ -16,8 +16,9 @@ const {
   buildTestMessagePayload,
   postMessage,
 } = require('../services/slackClient');
-const JiraService = require('../services/jira.service'); // Add JiraService
-const JiraIssue = require('../models/JiraIssue'); // Add JiraIssue model
+const JiraService = require('../services/jira.service');
+const JiraIssue = require('../models/JiraIssue');
+const { getSlackCallbackUrl, getJiraCallbackUrl, getGithubCallbackUrl, ensurePublicBackendUrl } = require('../utils/publicUrl');
 
 const router = express.Router();
 
@@ -50,7 +51,7 @@ router.get(
 
     authUrl.searchParams.append(
       'redirect_uri',
-      process.env.GITHUB_CALLBACK_URL
+      getGithubCallbackUrl() || process.env.GITHUB_CALLBACK_URL
     );
     authUrl.searchParams.append('scope', 'repo repo:hook read:org');
     authUrl.searchParams.append('state', state);
@@ -83,12 +84,11 @@ router.get('/github/callback', async (req, res) => {
 
   const tokenRes = await fetch('https://github.com/login/oauth/access_token', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },      body: JSON.stringify({
       client_id: process.env.GITHUB_INTEGRATION_CLIENT_ID,
       client_secret: process.env.GITHUB_INTEGRATION_CLIENT_SECRET,
       code: String(code),
-      redirect_uri: process.env.GITHUB_CALLBACK_URL,
+      redirect_uri: getGithubCallbackUrl() || process.env.GITHUB_CALLBACK_URL,
     }),
   });
   const tokenData = await tokenRes.json();
@@ -467,9 +467,14 @@ router.get(
       { upsert: true, new: true }
     );
 
+    const redirectUri = getSlackCallbackUrl();
+    if (!redirectUri) {
+      return res.status(503).json({ error: 'Slack OAuth callback URL not configured. Set BACKEND_PUBLIC_URL or start ngrok.' });
+    }
+
     const authUrl = new URL('https://slack.com/oauth/v2/authorize');
     authUrl.searchParams.append('client_id', clientId);
-    authUrl.searchParams.append('redirect_uri', process.env.SLACK_CALLBACK_URL);
+    authUrl.searchParams.append('redirect_uri', redirectUri);
     // incoming-webhook keeps the existing "Send Test Message" live; the
     // channel/user read scopes enable the Communication message history.
     authUrl.searchParams.append(
@@ -497,6 +502,12 @@ router.get('/slack/callback', async (req, res) => {
   const integration = await Integration.findOne({ provider: 'slack', state });
   if (!integration) return res.status(400).json({ error: 'Invalid or expired OAuth state.' });
 
+  const redirectUri = getSlackCallbackUrl();
+  if (!redirectUri) {
+    console.error('[slack/callback] Slack OAuth callback URL not configured');
+    return res.status(500).json({ error: 'Slack OAuth callback URL not configured on server.' });
+  }
+
   // Slack's oauth.v2.access endpoint expects application/x-www-form-urlencoded,
   // unlike GitHub's JSON body — this is a required deviation for Slack's API
   // to actually accept the exchange request, not a stylistic choice.
@@ -507,7 +518,7 @@ router.get('/slack/callback', async (req, res) => {
       client_id: process.env.SLACK_CLIENT_ID,
       client_secret: process.env.SLACK_CLIENT_SECRET,
       code: String(code),
-      redirect_uri: process.env.SLACK_CALLBACK_URL,
+      redirect_uri: redirectUri,
     }),
   });
   const tokenData = await tokenRes.json();
@@ -703,11 +714,16 @@ router.get(
     );
     console.log('[jira/auth] SAVED STATE:', state);
 
+    const redirectUri = getJiraCallbackUrl();
+    if (!redirectUri) {
+      return res.status(503).json({ error: 'Jira OAuth callback URL not configured. Set BACKEND_PUBLIC_URL or start ngrok.' });
+    }
+
     const authUrl = new URL('https://auth.atlassian.com/authorize');
     authUrl.searchParams.append('audience', 'api.atlassian.com');
     authUrl.searchParams.append('client_id', clientId);
     authUrl.searchParams.append('scope', 'read:jira-work read:jira-user manage:jira-webhook offline_access');
-    authUrl.searchParams.append('redirect_uri', process.env.JIRA_REDIRECT_URI || process.env.JIRA_CALLBACK_URL);
+    authUrl.searchParams.append('redirect_uri', redirectUri);
     authUrl.searchParams.append('response_type', 'code');
     authUrl.searchParams.append('prompt', 'consent');
     authUrl.searchParams.append('state', state);
@@ -735,6 +751,12 @@ router.get('/jira/callback', async (req, res) => {
     return res.status(400).json({ error: 'Invalid or expired OAuth state.' });
   }
 
+  const redirectUri = getJiraCallbackUrl();
+  if (!redirectUri) {
+    console.error('[jira/callback] Jira OAuth callback URL not configured');
+    return res.status(500).json({ error: 'Jira OAuth callback URL not configured on server.' });
+  }
+
   try {
     const tokenRes = await fetch('https://auth.atlassian.com/oauth/token', {
       method: 'POST',
@@ -744,7 +766,7 @@ router.get('/jira/callback', async (req, res) => {
         client_id: process.env.JIRA_CLIENT_ID,
         client_secret: process.env.JIRA_CLIENT_SECRET,
         code: String(code),
-        redirect_uri: process.env.JIRA_REDIRECT_URI || process.env.JIRA_CALLBACK_URL,
+        redirect_uri: redirectUri,
       }),
     });
     const tokenData = await tokenRes.json();
@@ -1083,7 +1105,10 @@ router.post(
         {
           $set: {
             status: 'syncing',
-            lastError: null
+            lastError: null,
+            issuesSynced: 0,    // reset counter so re-runs don't accumulate
+            failedCount: 0,     // reset failed counter
+            nextPageToken: '',  // restart pagination from page 1
           }
         },
         { upsert: true, new: true }

@@ -891,61 +891,29 @@ router.post('/change-password', authRateLimiter, authenticate, async (req, res) 
 // ---------------------------------------------------------------------------
 router.get('/me', authenticate, async (req, res) => {
   try {
-    const user = await User.findById(req.user.userId).select('-passwordHash');
+    const user = await User.findById(req.user.userId);
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    const memberships = await OrganizationMember.find({
-      userId: user._id,
-      status: 'active',
-    }).populate('organizationId');
+    const { wpPayload, role } = await resolveUserWorkspaceContext(user);
 
-    const availableOrganizations = memberships
-      .filter((m) => m.organizationId)
-      .map((m) => ({
-        id: m.organizationId._id.toString(),
-        name: m.organizationId.name,
-        role: m.role,
-      }));
-
-    let activeOrganization = null;
-    let role = null;
-    if (user.activeOrganizationId) {
-      const activeMember = memberships.find(
-        (m) =>
-          m.organizationId &&
-          m.organizationId._id.toString() === user.activeOrganizationId.toString()
-      );
-      if (activeMember) {
-        const activeOrg = activeMember.organizationId;
-        activeOrganization =
-          availableOrganizations.find(
-            (o) => o.id === user.activeOrganizationId.toString()
-          ) || null;
-        // Theme engine (TASK-107): expose the active org's theme settings so
-        // the workspace shell can apply brand color / density / navigation.
-        if (activeOrganization && activeOrg) {
-          activeOrganization.themeSettings = activeOrg.themeSettings || {};
-        }
-        role = activeMember.role;
-      }
-    }
-
-    const wpPayload = await fetchWorkspacePayload(user._id);
-
-    return res.status(200).json({
-      user,
-      activeOrganization,
+    res.status(200).json({
+      id: user._id.toString(),
+      email: user.email,
+      name: user.name,
+      username: user.username,
+      isVerified: user.isVerified,
+      authProvider: user.authProvider,
+      activeOrganizationId: user.activeOrganizationId
+        ? user.activeOrganizationId.toString()
+        : null,
+      ...wpPayload,
       role,
-      availableOrganizations,
-      hasWorkspace: wpPayload.hasWorkspace,
-      workspaceCount: wpPayload.workspaceCount,
-      workspaces: wpPayload.workspaces,
     });
   } catch (error) {
-    console.error('Me error:', error.message);
-    return res.status(500).json({ message: 'Internal server error' });
+    console.error('Get me error:', error.message);
+    res.status(500).json({ message: 'Internal server error' });
   }
 });
 

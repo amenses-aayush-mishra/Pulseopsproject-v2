@@ -126,7 +126,7 @@ export default function NotificationBell({ organizationId, role }) {
         id="notification-bell-button"
         onClick={() => setOpen((v) => !v)}
         aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
-        className="relative flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-slate-600 shadow-2xs hover:bg-white hover:text-indigo-600 transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        className="relative flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 dark:border-[#2F2F2F] bg-slate-50 dark:bg-[#191919] text-slate-600 dark:text-[#E9E9E7] shadow-2xs hover:bg-white dark:hover:bg-[#2A2A2A] hover:text-indigo-600 dark:hover:text-indigo-400 transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500"
       >
         <Bell className="h-4 w-4" />
         {badgeCount > 0 && (
@@ -143,14 +143,14 @@ export default function NotificationBell({ organizationId, role }) {
       {open && (
         <div
           id="notification-panel"
-          className="absolute right-0 mt-2 w-80 sm:w-96 rounded-2xl border border-slate-200/90 bg-white shadow-xl z-50 overflow-hidden"
+          className="absolute right-0 mt-2 w-80 sm:w-96 rounded-2xl border border-slate-200/90 dark:border-[#2F2F2F] bg-white dark:bg-[#202020] shadow-xl z-50 overflow-hidden"
         >
           {/* Panel Header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50/70">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-              <Bell className="h-3.5 w-3.5 text-indigo-600" /> Notifications
+          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-[#2F2F2F] bg-slate-50/70 dark:bg-[#191919]">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-[#E9E9E7] flex items-center gap-1.5">
+              <Bell className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" /> Notifications
               {unreadCount > 0 && (
-                <span className="ml-1 rounded-full bg-rose-100 text-rose-700 text-[10px] font-extrabold px-1.5 py-0.5">
+                <span className="ml-1 rounded-full bg-rose-100 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 text-[10px] font-extrabold px-1.5 py-0.5">
                   {unreadCount} new
                 </span>
               )}
@@ -162,7 +162,7 @@ export default function NotificationBell({ organizationId, role }) {
                   type="button"
                   onClick={() => markAllMut.mutate()}
                   disabled={markAllMut.isPending}
-                  className="flex items-center gap-1 text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 transition-colors disabled:opacity-50"
+                  className="flex items-center gap-1 text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 transition-colors disabled:opacity-50"
                   title="Mark all as read"
                 >
                   <CheckCheck className="h-3.5 w-3.5" /> All read
@@ -171,7 +171,7 @@ export default function NotificationBell({ organizationId, role }) {
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="text-slate-400 hover:text-slate-700 transition-colors"
+                className="text-slate-400 dark:text-[#6F6F6F] hover:text-slate-700 dark:hover:text-[#E9E9E7] transition-colors"
                 aria-label="Close notifications"
               >
                 <X className="h-4 w-4" />
@@ -180,18 +180,18 @@ export default function NotificationBell({ organizationId, role }) {
           </div>
 
           {/* Notification List */}
-          <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">
+          <div className="max-h-80 overflow-y-auto divide-y divide-slate-100 dark:divide-[#2F2F2F]">
             {isViewer && (
-              <div className="px-4 py-6 text-center text-sm text-slate-400">
+              <div className="px-4 py-6 text-center text-sm text-slate-400 dark:text-[#9B9B9B]">
                 No notifications for your role.
               </div>
             )}
 
             {!isViewer && notifications.length === 0 && (
               <div className="px-4 py-8 text-center">
-                <Bell className="h-8 w-8 text-slate-200 mx-auto mb-2" />
-                <p className="text-sm font-medium text-slate-500">You&apos;re all caught up!</p>
-                <p className="text-xs text-slate-400 mt-0.5">New GitHub, Jira &amp; Slack events will appear here.</p>
+                <Bell className="h-8 w-8 text-slate-200 dark:text-[#2F2F2F] mx-auto mb-2" />
+                <p className="text-sm font-medium text-slate-500 dark:text-[#9B9B9B]">You&apos;re all caught up!</p>
+                <p className="text-xs text-slate-400 dark:text-[#6F6F6F] mt-0.5">New GitHub, Jira &amp; Slack events will appear here.</p>
               </div>
             )}
 

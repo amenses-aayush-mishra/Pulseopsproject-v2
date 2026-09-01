@@ -94,6 +94,16 @@ async function runTests() {
     let threwGen = false;
     try { await generateSummary('org_123'); } catch (_) { threwGen = true; }
     check('generateSummary throws on 400', threwGen);
+
+    // 6) generateSummary & fetchLatestSummary — sends Authorization & x-organization-id when token provided
+    stubFetch(async (url, opts) => {
+      check('auth headers include Bearer token', opts.headers?.Authorization === 'Bearer secret_token');
+      check('auth headers include x-organization-id', opts.headers?.['x-organization-id'] === 'org_123');
+      return jsonResponse(200, { data: { _id: 'auth_ok' } });
+    });
+    await fetchLatestSummary('org_123', 'secret_token');
+    await generateSummary('org_123', 'weekly', 'secret_token');
+
   } finally {
     restoreFetch();
   }

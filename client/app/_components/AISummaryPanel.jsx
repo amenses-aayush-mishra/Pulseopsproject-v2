@@ -25,9 +25,9 @@ export default function AISummaryPanel({ organizationId }) {
     isLoading,
     refetch,
   } = useQuery({
-    queryKey: ['aiSummary', organizationId],
-    queryFn: () => fetchLatestSummary(organizationId),
-    enabled: !!organizationId,
+    queryKey: ['aiSummary', organizationId, bearer],
+    queryFn: () => fetchLatestSummary(organizationId, bearer),
+    enabled: !!organizationId && !!bearer,
     refetchInterval: 30000,
     staleTime: 10000,
   });
@@ -57,10 +57,10 @@ export default function AISummaryPanel({ organizationId }) {
 
   // Mutation: generate new summary
   const mutation = useMutation({
-    mutationFn: () => generateSummary(organizationId),
+    mutationFn: () => generateSummary(organizationId, 'weekly', bearer),
     onMutate: () => setError(null),
     onSuccess: (newSummary) => {
-      queryClient.setQueryData(['aiSummary', organizationId], newSummary);
+      queryClient.setQueryData(['aiSummary', organizationId, bearer], newSummary);
       refetch();
     },
     onError: (err) => {

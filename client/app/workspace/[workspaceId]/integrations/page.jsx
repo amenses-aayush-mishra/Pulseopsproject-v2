@@ -10,16 +10,16 @@ const API_BASE = process.env.NEXT_PUBLIC_EXPRESS_API_URL || 'http://localhost:50
 
 function IntegrationCard({ icon, title, description, badge, topActions, action }) {
   return (
-    <div className="rounded-2xl border border-slate-200/80 bg-white shadow-2xs overflow-hidden">
+    <div className="rounded-2xl border border-slate-200/80 dark:border-[#2F2F2F] bg-white dark:bg-[#202020] shadow-2xs overflow-hidden">
       <div className="p-6 sm:p-7">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4 min-w-0">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-slate-100 border border-slate-200/60 shadow-2xs">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-slate-100 dark:bg-[#191919] border border-slate-200/60 dark:border-[#2F2F2F] shadow-2xs">
               {icon}
             </div>
             <div className="min-w-0">
-              <h3 className="text-base font-bold text-slate-900 truncate">{title}</h3>
-              <p className="text-sm text-slate-500 mt-0.5 truncate">{description}</p>
+              <h3 className="text-base font-bold text-slate-900 dark:text-[#E9E9E7] truncate">{title}</h3>
+              <p className="text-sm text-slate-500 dark:text-[#9B9B9B] mt-0.5 truncate">{description}</p>
             </div>
           </div>
           <div className="shrink-0 flex items-center gap-3 self-end sm:self-auto">
@@ -27,7 +27,7 @@ function IntegrationCard({ icon, title, description, badge, topActions, action }
             {topActions}
           </div>
         </div>
-        {action && <div className="mt-6 border-t border-slate-100 pt-6">{action}</div>}
+        {action && <div className="mt-6 border-t border-slate-100 dark:border-[#2F2F2F] pt-6">{action}</div>}
       </div>
     </div>
   );
@@ -162,9 +162,9 @@ function GitHubPanel({ workspaceId, token }) {
       });
       const data = await res.json();
       if (data.url) {
-        const redirectUri = encodeURIComponent('http://localhost:5000/api/integrations/github/callback');
+        // The server already sets the correct redirect_uri via getGithubCallbackUrl()
+        // (resolves to BACKEND_API_URL / ngrok URL). Do NOT override with localhost.
         const urlObj = new URL(data.url);
-        urlObj.searchParams.set('redirect_uri', decodeURIComponent(redirectUri));
         urlObj.searchParams.set('prompt', 'select_account');
         window.location.href = urlObj.toString();
       } else {
@@ -583,6 +583,9 @@ function JiraPanel({ workspaceId, token }) {
   const [selectedProjectKey, setSelectedProjectKey] = useState('');
   const [projectsError, setProjectsError] = useState('');
 
+  // Jira status (full status response — contains syncStates[])
+  const [status, setStatus] = useState(null);
+
   // Sync
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState(null);
@@ -612,6 +615,8 @@ function JiraPanel({ workspaceId, token }) {
         setLastSyncAt(data.lastSyncAt || null);
         setWebhookRegistered(Boolean(data.webhookRegistered));
         if (data.webhookUrl) setWebhookUrl(data.webhookUrl);
+        // Store full status so syncStates polling works
+        setStatus(data);
       }
     } catch {
       // Ignore network errors for status check
@@ -659,6 +664,7 @@ function JiraPanel({ workspaceId, token }) {
   }, [isConnected]);
 
   useEffect(() => {
+    // Poll status every 3s while any project is syncing
     let intervalId;
     if (status?.syncStates?.some(s => s.status === 'syncing')) {
       intervalId = setInterval(() => {
@@ -668,7 +674,25 @@ function JiraPanel({ workspaceId, token }) {
     return () => {
       if (intervalId) clearInterval(intervalId);
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
+
+  // When the polled status transitions from 'syncing' -> 'synced'/'error',
+  // resolve the syncResult with the real persisted issuesSynced count.
+  useEffect(() => {
+    if (!syncing || !selectedProjectKey) return;
+    const currentSyncState = status?.syncStates?.find(s => s.projectKey === selectedProjectKey);
+    if (!currentSyncState) return;
+    if (currentSyncState.status === 'synced') {
+      const count = typeof currentSyncState.issuesSynced === 'number' ? currentSyncState.issuesSynced : 0;
+      setSyncResult({ ok: true, message: `Synced ${count} issues from ${selectedProjectKey}.`, synced: count });
+      setSyncing(false);
+    } else if (currentSyncState.status === 'error') {
+      setSyncResult({ ok: false, message: currentSyncState.lastError || 'Jira issue sync failed.' });
+      setSyncing(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, syncing, selectedProjectKey]);
 
   const handleConnect = async () => {
     setConnecting(true);
@@ -727,16 +751,22 @@ function JiraPanel({ workspaceId, token }) {
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.success) {
-        setSyncResult({ ok: true, message: `Synced ${data.synced} issues from ${data.projectKey}.`, synced: data.synced });
+        // Sync is async — the background worker writes to JiraSyncState.
+        // Show "in progress" immediately; the polling useEffect below will
+        // detect when status transitions to 'synced' and update the message.
+        setSyncResult({ ok: null, message: `Syncing issues from ${data.projectKey || selectedProjectKey}…` });
+        // Trigger an immediate status refresh so the polling useEffect activates
         loadStatus();
       } else {
         setSyncResult({ ok: false, message: data.error || 'Sync failed.' });
+        setSyncing(false);
       }
     } catch {
       setSyncResult({ ok: false, message: 'Could not reach the server.' });
-    } finally {
       setSyncing(false);
     }
+    // Note: setSyncing(false) is intentionally NOT called on success here.
+    // It will be called by the polling useEffect when the sync completes.
   };
 
   const handleRegisterWebhook = async () => {
@@ -832,7 +862,129 @@ function JiraPanel({ workspaceId, token }) {
 
           </div>
         ) : showDetails ? (
-          <>
+            <>
+              {/* Connected Info */}
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium text-slate-900">Site:</span>
+                  <span className="truncate max-w-xs font-mono text-xs bg-white px-2 py-1 rounded border">{siteUrl}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="font-medium text-slate-900">Cloud ID:</span>
+                  <span className="truncate max-w-xs font-mono text-xs bg-white px-2 py-1 rounded border">{cloudId}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="font-medium text-slate-900">Last Sync:</span>
+                  <span>{formatDate(lastSyncAt)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="font-medium text-slate-900">Webhook:</span>
+                  <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${webhookRegistered ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
+                    {webhookRegistered ? 'Registered' : 'Not Registered'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Projects Selection */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-semibold text-slate-900">Select Project to Sync</h4>
+                  <button
+                    onClick={loadProjects}
+                    disabled={projectsLoading}
+                    className="text-xs text-indigo-600 hover:underline disabled:opacity-50"
+                  >
+                    {projectsLoading ? 'Loading...' : 'Refresh'}
+                  </button>
+                </div>
+                {projectsError && <p className="text-sm text-rose-600">{projectsError}</p>}
+                {projectsLoading ? (
+                  <div className="flex justify-center py-4">
+                    <Loader2 className="h-6 w-6 animate-spin text-slate-300" />
+                  </div>
+                ) : projects.length === 0 ? (
+                  <p className="text-sm text-slate-500">No projects found or Jira not connected.</p>
+                ) : (
+                  <select
+                    value={selectedProjectKey}
+                    onChange={(e) => setSelectedProjectKey(e.target.value)}
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200"
+                  >
+                    <option value="">— Choose a project —</option>
+                    {projects.map((p) => (
+                      <option key={p.key} value={p.key}>
+                        {p.key} — {p.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              {/* Sync Section */}
+              {selectedProjectKey && (
+                <div className="space-y-3 rounded-lg border border-slate-200 p-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-semibold text-slate-900">Sync Issues</h4>
+                    {status?.syncStates?.find(s => s.projectKey === selectedProjectKey)?.status === 'syncing' && (
+                      <span className="inline-flex items-center gap-1 text-xs text-amber-600 font-medium">
+                        <Loader2 className="h-3 w-3 animate-spin" /> Syncing in background...
+                      </span>
+                    )}
+                  </div>
+                  {status?.syncStates?.find(s => s.projectKey === selectedProjectKey) && (() => {
+                    const ss = status.syncStates.find(s => s.projectKey === selectedProjectKey);
+                    const synced = typeof ss.issuesSynced === 'number' ? ss.issuesSynced : 0;
+                    const failed = typeof ss.failedCount === 'number' ? ss.failedCount : 0;
+                    return (
+                      <div className="space-y-1 mb-2">
+                        <div className="text-xs text-slate-500">
+                          <span className="font-medium text-slate-700">{synced}</span> issues stored
+                          {failed > 0 && (
+                            <span className="text-rose-600 ml-1">· {failed} failed</span>
+                          )}
+                          {' · '}Status:{' '}
+                          <span className={`font-medium capitalize ${
+                            ss.status === 'synced' ? 'text-emerald-600'
+                            : ss.status === 'error' ? 'text-rose-600'
+                            : ss.status === 'syncing' ? 'text-amber-600'
+                            : 'text-slate-700'
+                          }`}>{ss.status}</span>
+                        </div>
+                        {/* Surface the real error — never leave user with just "Status: Error" */}
+                        {ss.status === 'error' && ss.lastError && (
+                          <p className="text-xs text-rose-600 bg-rose-50 border border-rose-200 rounded px-2 py-1">
+                            ⚠ {ss.lastError}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })()}
+                  {syncResult && (
+                    <div
+                      role={syncResult.ok === true ? 'status' : 'alert'}
+                      className={`rounded-lg border px-4 py-2.5 text-xs font-medium ${
+                        syncResult.ok === true
+                          ? 'border-emerald-100 bg-emerald-50 text-emerald-700'
+                          : syncResult.ok === null
+                          ? 'border-amber-100 bg-amber-50 text-amber-700'
+                          : 'border-rose-200 bg-rose-50 text-rose-700'
+                      }`}
+                    >
+                      {syncResult.ok === true && `✓ ${syncResult.message}`}
+                      {syncResult.ok === false && `⚠ ${syncResult.message}`}
+                      {syncResult.ok === null && `⟳ ${syncResult.message}`}
+                    </div>
+                  )}
+                  <button
+                    onClick={handleSync}
+                    disabled={syncing || !selectedProjectKey || status?.syncStates?.find(s => s.projectKey === selectedProjectKey)?.status === 'syncing'}
+                    className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-700 disabled:opacity-60"
+                  >
+                    {(syncing || status?.syncStates?.find(s => s.projectKey === selectedProjectKey)?.status === 'syncing') ? <Loader2 className="h-4 w-4 animate-spin" /> : <Loader2 className="h-4 w-4" />}
+                    {(syncing || status?.syncStates?.find(s => s.projectKey === selectedProjectKey)?.status === 'syncing') ? 'Syncing…' : 'Start Full Sync'}
+                  </button>
+                </div>
+              )}
 
             {/* Webhook Registration */}
             {selectedProjectKey && (
