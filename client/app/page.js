@@ -198,13 +198,6 @@ export default function HomePage() {
 
           {/* Hero Content Center Stack */}
           <div className="max-w-3xl">
-            {/* Eyebrow */}
-            <div className="inline-flex items-center gap-2 mb-6">
-              <span className="w-2 h-2 rounded-full bg-indigo-600"></span>
-              <span className="text-[11px] sm:text-xs font-bold tracking-widest text-indigo-600 uppercase">
-                ONE WORKSPACE. FULL CONTEXT.
-              </span>
-            </div>
 
             {/* Main Headline with Indigo Hand-drawn Underline */}
             <h1 className="text-4xl sm:text-6xl md:text-7xl font-extrabold tracking-tight text-slate-900 leading-[1.08]">
@@ -384,8 +377,6 @@ export default function HomePage() {
                   One workspace.
                   <br />
                   Full context.
-                  <br />
-                  Total clarity.
                 </p>
               </div>
 
